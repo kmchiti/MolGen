@@ -1,0 +1,108 @@
+wandb_version: 1
+
+seed:
+  desc: null
+  value: 42
+save_path:
+  desc: null
+  value: ./save
+wandb_logs:
+  desc: null
+  value: true
+wandb:
+  desc: null
+  value:
+    name: null
+    project: Molecule Language Model
+    entity: molgpt
+    tags: []
+    mode: online
+dataset:
+  desc: null
+  value:
+    data_root: ./data/processed/training/
+    tokenizer_path: tokenizers/BPE_pubchem_500.json
+    dataset_path: pubchem/*
+    file_type: parquet
+    overwrite_cache: true
+    max_seq_length: 64
+    batch_size: 16
+    dataloader_num_workers: 24
+    preprocess_num_workers: 4
+    folder_url: https://drive.google.com/drive/folders/1qLFWbdixlIUimdi5brdfXlv3Qiw8UAp3
+model:
+  desc: null
+  value:
+    model_name_or_path: gpt2
+    max_seq_length: 64
+    vocab_size: 30002
+    bos_token_id: <bos>
+    eos_token_id: <eos>
+    use_flash_attention_2: false
+trainer:
+  desc: null
+  value:
+    bf16: true
+    dataloader_drop_last: true
+    dataloader_num_workers: 4
+    dataloader_pin_memory: true
+    do_eval: true
+    do_train: true
+    evaluation_strategy: steps
+    eval_steps: 100
+    gradient_accumulation_steps: 8
+    gradient_checkpointing: false
+    learning_rate: 0.0006
+    log_on_each_node: false
+    logging_steps: 1
+    lr_scheduler_type: cosine
+    max_grad_norm: 1.0
+    max_steps: 300000
+    optim: adamw_torch
+    per_device_eval_batch_size: 64
+    per_device_train_batch_size: 64
+    save_steps: 15000
+    save_strategy: steps
+    save_total_limit: 20
+    torch_compile: false
+    warmup_ratio: 0.0
+    weight_decay: 0.1
+_wandb:
+  desc: null
+  value:
+    python_version: 3.9.6
+    cli_version: 0.15.12
+    framework: huggingface
+    huggingface_version: 4.34.0
+    is_jupyter_run: false
+    is_kaggle_kernel: false
+    start_time: 1701050217.356876
+    t:
+      1:
+      - 1
+      - 11
+      - 49
+      - 50
+      - 51
+      - 55
+      - 71
+      - 105
+      2:
+      - 1
+      - 11
+      - 49
+      - 50
+      - 51
+      - 55
+      - 71
+      - 105
+      3:
+      - 13
+      - 16
+      - 23
+      4: 3.9.6
+      5: 0.15.12
+      6: 4.34.0
+      8:
+      - 5
+      13: darwin-x86_64

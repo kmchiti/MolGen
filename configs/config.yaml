@@ -1,0 +1,21 @@
+# The Defaults List is a list in an input config that instructs Hydra how to build the output config.
+defaults:
+  - _self_
+  - dataset: chem_smiles
+  - model: gpt2
+  - trainer: hf_trainer
+
+seed: 42
+save_path: './save'
+
+hydra:
+  run:
+    dir: outputs/${now:%Y-%m-%d-%H-%M-%S}/hydra
+
+wandb_logs: true
+wandb:
+  name: null
+  project: Molecule Language Model
+  entity: molgpt
+  tags: []
+  mode: online

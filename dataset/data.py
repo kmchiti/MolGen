@@ -1,5 +1,7 @@
-import pytorch_lightning as pl
+import warnings
+import os
 from datasets import Features, Value, load_dataset
+from typing import Optional
 from torch.utils.data.dataloader import DataLoader
 from transformers import (
     DataCollatorForLanguageModeling,
@@ -7,9 +9,10 @@ from transformers import (
 )
 
 
-class MolGenDataModule(pl.LightningDataModule):
+class MolGenDataModule(object):
     def __init__(
         self,
+        data_root: str,
         tokenizer_path: str,
         dataset_path: str,
         file_type: str,
@@ -18,18 +21,47 @@ class MolGenDataModule(pl.LightningDataModule):
         batch_size: int,
         dataloader_num_workers: int,
         preprocess_num_workers: int,
+        folder_url: Optional[str] = None,
     ):
         super().__init__()
-        self.tokenizer_path = tokenizer_path
-        self.dataset_path = dataset_path
+        self.tokenizer_path = os.path.join(data_root, tokenizer_path)
+        self.dataset_path = os.path.join(data_root, dataset_path)
         self.file_type = file_type
         self.overwrite_cache = overwrite_cache
         self.max_seq_length = max_seq_length
         self.batch_size = batch_size
         self.dataloader_num_workers = dataloader_num_workers
         self.preprocess_num_workers = preprocess_num_workers
+        self.folder_url = folder_url
+        self.data_collator = None
+        self.eval_dataset = None
+        self.train_dataset = None
 
-    def setup(self, stage=None):
+    def _dataset_available(self):
+        return os.path.isdir(self.tokenizer_path) and os.path.isdir(self.dataset_path)
+
+    def download_dataset(self):
+        import gdown
+
+        folder_id = self.folder_url.split('/')[-1]
+        gdown.cached_download(f"https://drive.google.com/uc?id={folder_id}", f"{folder_id}.json")
+
+        # Extract file IDs from the metadata
+        with open(f"{folder_id}.json", 'r') as f:
+            metadata = f.read()
+
+        file_ids = [line.split('"')[3] for line in metadata.split('\n') if '"id"' in line]
+
+        # Download each file in the folder
+        for file_id in file_ids:
+            gdown.download(f"https://drive.google.com/uc?id={file_id}", output=f"{file_id}.txt")
+
+    def setup(self):
+
+        if not self._dataset_available():
+            warnings.warn('dataset is not available! download the dataset')
+            self.download_dataset()
+
         # Load tokenizer
         tokenizer = PreTrainedTokenizerFast(tokenizer_file=self.tokenizer_path)
         tokenizer.add_special_tokens({"additional_special_tokens": ["<bos>", "<eos>"]})  # type: ignore

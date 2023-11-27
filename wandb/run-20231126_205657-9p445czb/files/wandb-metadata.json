@@ -1,0 +1,45 @@
+{
+    "os": "macOS-14.0-x86_64-i386-64bit",
+    "python": "3.9.6",
+    "heartbeatAt": "2023-11-27T01:56:57.958121",
+    "startedAt": "2023-11-27T01:56:57.342453",
+    "docker": null,
+    "cuda": null,
+    "args": [],
+    "state": "running",
+    "program": "/Users/kmchiti/PycharmProjects/MolGen/train.py",
+    "codePathLocal": "train.py",
+    "codePath": "train.py",
+    "git": {
+        "remote": "git@github.com:kmchiti/MolGen.git",
+        "commit": "84b8422a75354d3d7d901af9a9d0647ddbe50ef0"
+    },
+    "email": null,
+    "root": "/Users/kmchiti/PycharmProjects/MolGen",
+    "host": "Kamrans-MacBook-Pro.local",
+    "username": "kmchiti",
+    "executable": "/Users/kmchiti/PycharmProjects/MolGen/ENV/bin/python",
+    "cpu_count": 4,
+    "cpu_count_logical": 8,
+    "cpu_freq": {
+        "current": 2700,
+        "min": 2700,
+        "max": 2700
+    },
+    "cpu_freq_per_core": [
+        {
+            "current": 2700,
+            "min": 2700,
+            "max": 2700
+        }
+    ],
+    "disk": {
+        "/": {
+            "total": 465.62699127197266,
+            "used": 12.429252624511719
+        }
+    },
+    "memory": {
+        "total": 16.0
+    }
+}
