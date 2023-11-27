@@ -36,6 +36,7 @@ class MolGenDataModule(object):
         self.data_collator = None
         self.eval_dataset = None
         self.train_dataset = None
+        self.tokenizer = None
 
     def _dataset_available(self):
         return os.path.exists(self.tokenizer_path) and os.path.exists(self.dataset_path[:-1])
@@ -68,6 +69,7 @@ class MolGenDataModule(object):
         tokenizer.eos_token = "<eos>"
         tokenizer.bos_token = "<bos>"
         tokenizer.pad_token = tokenizer.eos_token
+        self.tokenizer = tokenizer
 
         # Load dataset
         dataset = load_dataset(

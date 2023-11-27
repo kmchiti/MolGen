@@ -18,6 +18,7 @@ class GPT2MolGen(GPT2LMHeadModel, ABC):
                             n_ctx=max_seq_length,
                             bos_token_id=bos_token_id,
                             eos_token_id=eos_token_id,
+                            use_flash_attention_2=use_flash_attention_2,
                     )
         # TODO: add flash_atten
         GPT2LMHeadModel.__init__(self, config)
