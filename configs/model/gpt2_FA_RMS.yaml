@@ -7,7 +7,7 @@ use_flash_attn: true
 fused_bias_fc: false
 fused_mlp: false
 fused_dropout_add_ln: false
-residual_in_fp32: true
+residual_in_fp32: false
 pad_vocab_size_multiple: 8
 use_rms_norm: true
 prenorm: false
