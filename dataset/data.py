@@ -38,7 +38,7 @@ class MolGenDataModule(object):
         self.train_dataset = None
 
     def _dataset_available(self):
-        return os.path.isdir(self.tokenizer_path) and os.path.isdir(self.dataset_path)
+        return os.path.exists(self.tokenizer_path) and os.path.exists(self.dataset_path[:-1])
 
     def download_dataset(self):
         import gdown

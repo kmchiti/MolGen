@@ -11,6 +11,6 @@ module load libffi
 source ../ENV/bin/activate
 export HF_HOME=$SCRATCH/hf_home
 
-wandb login --relogin 73fd65ff1623ce64c1f20ed621c065ec55d7eaa3
+# wandb login --relogin 73fd65ff1623ce64c1f20ed621c065ec55d7eaa3
 
 python train.py

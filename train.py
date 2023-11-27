@@ -6,6 +6,9 @@ from models import GPT2MolGen
 import wandb
 import os
 
+# from hydra import compose, initialize
+# with initialize(version_base=None, config_path="configs"):
+#     cfg = compose(config_name="config")
 
 def _checkpoint_is_available(trainer):
     items = os.listdir(trainer.args.output_dir)
@@ -26,7 +29,7 @@ def entrypoint(cfg: DictConfig):
 
     # Initialize DataModule
     datamodule = MolGenDataModule(**cfg.dataset)
-    # datamodule.setup()
+    datamodule.setup()
 
     # Initialize model
     model = GPT2MolGen(**cfg.model)
@@ -41,13 +44,13 @@ def entrypoint(cfg: DictConfig):
                                        seed=cfg.seed, logging_dir=output_dir, report_to=['wandb'])
 
     else:
-        print('kir')
         os.environ["WANDB_DISABLED"] = "true"
         train_args = TrainingArguments(**cfg.trainer, output_dir=output_dir, data_seed=cfg.seed,
                                        seed=cfg.seed, logging_dir=output_dir, report_to=None)
 
     trainer = Trainer(model=model,
                       args=train_args,
+                      data_collator=datamodule.data_collator,
                       train_dataset=datamodule.train_dataset,
                       eval_dataset=datamodule.eval_dataset,)
 

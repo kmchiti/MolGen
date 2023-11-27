@@ -2,9 +2,9 @@ data_root: "./data/processed/training/"
 tokenizer_path: "tokenizers/BPE_pubchem_500.json"
 dataset_path: "pubchem/*"
 file_type: "parquet"
-overwrite_cache: true
+overwrite_cache: false
 max_seq_length: 64
 batch_size: 16
-dataloader_num_workers: 24
-preprocess_num_workers: 4
+dataloader_num_workers: 4
+preprocess_num_workers: 24
 folder_url: "https://drive.google.com/drive/folders/1qLFWbdixlIUimdi5brdfXlv3Qiw8UAp3"
