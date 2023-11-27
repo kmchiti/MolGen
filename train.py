@@ -2,7 +2,7 @@ import hydra
 from omegaconf import DictConfig, OmegaConf
 from transformers import set_seed, Trainer, TrainingArguments
 from dataset import MolGenDataModule
-from models import GPT2MolGen
+from models import GPT2MolGen, GPT2MolGen_flash_atten
 import wandb
 import os
 
@@ -29,7 +29,10 @@ def entrypoint(cfg: DictConfig):
     datamodule.setup()
 
     # Initialize model
-    model = GPT2MolGen(**cfg.model)
+    if cfg.model.model_name_or_path == 'gpt2_flash_atten':
+        model = GPT2MolGen_flash_atten(**cfg.model)
+    else:
+        model = GPT2MolGen(**cfg.model)
 
     # Initialize trainer
     if cfg.wandb_logs:
@@ -46,7 +49,7 @@ def entrypoint(cfg: DictConfig):
 
     trainer = Trainer(model=model,
                       args=train_args,
-                      tokenizer=datamodule.tokenizer,
+                      data_collator=datamodule.data_collator,
                       train_dataset=datamodule.train_dataset,
                       eval_dataset=datamodule.eval_dataset,)
 

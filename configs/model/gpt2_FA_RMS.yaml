@@ -1,0 +1,17 @@
+model_name_or_path: 'gpt2_flash_atten'
+max_seq_length: 64
+vocab_size: 30002
+bos_token_id: "<bos>"
+eos_token_id: "<eos>"
+use_flash_attn: true
+fused_bias_fc: false
+fused_mlp: false
+fused_dropout_add_ln: false
+residual_in_fp32: true
+pad_vocab_size_multiple: 8
+use_rms_norm: true
+prenorm: false
+rotary_emb_fraction: 0.0
+rotary_emb_base: 1000.0
+rotary_emb_scale_base: null
+rotary_emb_interleaved: true
