@@ -7,10 +7,10 @@ use_flash_attn: true
 fused_bias_fc: false
 fused_mlp: false
 fused_dropout_add_ln: false
-residual_in_fp32: false
+residual_in_fp32: true
+prenorm: true
 pad_vocab_size_multiple: 8
 use_rms_norm: false
-prenorm: false
 rotary_emb_fraction: 0.0
 rotary_emb_base: 1000.0
 rotary_emb_scale_base: null
