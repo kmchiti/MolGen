@@ -3,6 +3,7 @@ from omegaconf import DictConfig, OmegaConf
 from transformers import set_seed, Trainer, TrainingArguments
 from dataset import MolGenDataModule
 from models import GPT2MolGen, GPT2MolGen_flash_atten
+from utils import creat_unique_experiment_name
 import wandb
 import os
 
@@ -19,8 +20,7 @@ def entrypoint(cfg: DictConfig):
 
     # Initialize setup
     set_seed(cfg.seed)
-    # TODO: set exp name
-    exp_name = 'MolGPT_test'
+    exp_name = creat_unique_experiment_name(cfg)
     output_dir = os.path.join(cfg.save_path, exp_name)
     os.makedirs(output_dir, exist_ok=True)
 
