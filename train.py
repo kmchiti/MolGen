@@ -3,7 +3,7 @@ from omegaconf import DictConfig, OmegaConf
 from transformers import set_seed, Trainer, TrainingArguments
 from dataset import MolGenDataModule
 from models import GPT2MolGen, GPT2MolGen_flash_atten
-from utils import creat_unique_experiment_name
+from utils import creat_unique_experiment_name, is_world_process_zero
 import wandb
 import os
 
@@ -36,11 +36,12 @@ def entrypoint(cfg: DictConfig):
 
     # Initialize trainer
     if cfg.wandb_logs:
-        wandb.init(entity=cfg.wandb.entity, project=cfg.wandb.project,
-                   name=exp_name, config=OmegaConf.to_container(cfg),
-                   tags=cfg.wandb.tags, mode=cfg.wandb.mode)
         train_args = TrainingArguments(**cfg.trainer, output_dir=output_dir, data_seed=cfg.seed,
                                        seed=cfg.seed, logging_dir=output_dir, report_to=['wandb'])
+        if is_world_process_zero(train_args):
+            wandb.init(entity=cfg.wandb.entity, project=cfg.wandb.project,
+                       name=exp_name, config=OmegaConf.to_container(cfg),
+                       tags=cfg.wandb.tags, mode=cfg.wandb.mode)
 
     else:
         os.environ["WANDB_DISABLED"] = "true"
