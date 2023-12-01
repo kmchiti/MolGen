@@ -8,7 +8,7 @@
 #SBATCH --mem-per-gpu=32G               # memory per gpu
 
 module load libffi
-source ../ENV/bin/activate
+source ../../ENV/bin/activate
 export HF_HOME=$SCRATCH/hf_home
 
 # wandb login --relogin 73fd65ff1623ce64c1f20ed621c065ec55d7eaa3

@@ -11,7 +11,7 @@
 #SBATCH --constraint=80gb               # constraints
 
 module load libffi
-source ../ENV/bin/activate
+source ../../ENV/bin/activate
 export HF_HOME=$SCRATCH/hf_home
 
 torchrun --nproc_per_node=4 train.py

@@ -39,6 +39,12 @@ pip install 'accelerate==0.23.0'
 pip install 'hydra-core==1.3'
 pip install 'gdown==4.7.1'
 pip install wheel setuptools py-cpuinfo
+pip install 'molvs==0.1.1'
+pip install 'selfies==2.1.1'
+pip install 'PyTDC'
+pip install 'rdkit' # 2023_09_2 (Q3 2023) Release
+pip install 'CIRpy==1.0.2'
+pip install 'tabulate==0.9.0'
 
 # Clone and install flash-attention v2
 NV_CC="8.0;8.6" # flash-attention-v2 and exllama_kernels are anyway limited to CC of 8.0+
@@ -65,4 +71,9 @@ TORCH_CUDA_ARCH_LIST="$NV_CC" DS_BUILD_FUSED_ADAM=1 DS_BUILD_FUSED_LION=1 DS_BUI
 pip install . --global-option="build_ext" --global-option="-j4" --no-cache -v \
 --disable-pip-version-check 2>&1 | tee build.log
 
-
+# Clone and install moses
+Moses_DIR="$WORK_DIR/moses"
+git lfs install
+git clone https://github.com/molecularsets/moses.git "$Moses_DIR"
+cd "$Moses_DIR"
+python setup.py install
