@@ -6,10 +6,10 @@ class GPT2MolGen(GPT2LMHeadModel, ABC):
     def __init__(
             self,
             model_name_or_path: str,
-            max_seq_length: Optional[int],
-            vocab_size: Optional[int],
-            bos_token_id: Optional[str],
-            eos_token_id: Optional[str],
+            max_seq_length: Optional[int] = 64,
+            vocab_size: Optional[int] = 30002,
+            bos_token_id: Optional[str] = "<bos>",
+            eos_token_id: Optional[str] = "<eos>",
             use_flash_attention_2: Optional[bool] = False,
     ):
         config = AutoConfig.from_pretrained(

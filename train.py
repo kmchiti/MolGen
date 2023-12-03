@@ -3,7 +3,7 @@ from omegaconf import DictConfig, OmegaConf
 from transformers import set_seed, Trainer, TrainingArguments
 from dataset import MolGenDataModule
 from models import GPT2MolGen, GPT2MolGen_flash_atten
-from utils import creat_unique_experiment_name, is_world_process_zero
+from utils import creat_unique_experiment_name, is_world_process_zero, save_HF_model
 import wandb
 import os
 
@@ -60,6 +60,9 @@ def entrypoint(cfg: DictConfig):
     else:
         train_result = trainer.train()
     trainer.save_model()  # Saves the tokenizer too for easy upload
+    if is_world_process_zero(train_args):
+        print('save remapped HF model to:', os.path.join(output_dir, 'HF'))
+        save_HF_model(model, model.config, os.path.join(output_dir, 'HF'))
 
 
 if __name__ == "__main__":

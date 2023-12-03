@@ -142,7 +142,7 @@ def save_HF_model(model, config: GPT2Config, output_dir: str):
     config = AutoConfig.from_pretrained(
         'gpt2',
         vocab_size=(math.ceil(config.vocab_size / pad_vocab_size_multiple) * pad_vocab_size_multiple),
-        n_ctx=config.max_seq_length,
+        n_ctx=config.n_ctx,
         bos_token_id=config.bos_token_id,
         eos_token_id=config.eos_token_id,
     )
