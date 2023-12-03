@@ -62,7 +62,9 @@ def entrypoint(cfg: DictConfig):
     # Print the accuracy or other relevant metrics
     print(results)
 
-    save_HF_model(model, model.config, os.path.join(output_dir, 'HF'))
+    if is_world_process_zero(train_args):
+        print('save model to:', os.path.join(output_dir, 'HF'))
+        save_HF_model(model, model.config, os.path.join(output_dir, 'HF'))
 
 
 if __name__ == "__main__":

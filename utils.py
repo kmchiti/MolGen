@@ -2,7 +2,7 @@ from typing import Dict, Any, List
 from omegaconf import DictConfig, OmegaConf
 from collections import OrderedDict, namedtuple
 import torch.nn.functional as F
-from transformers import GPT2Config, GPT2LMHeadModel
+from transformers import GPT2Config, GPT2LMHeadModel, AutoConfig
 import copy
 import json
 import hashlib
@@ -139,7 +139,13 @@ def save_HF_model(model, config: GPT2Config, output_dir: str):
 
     # update the config
     pad_vocab_size_multiple = getattr(config, "pad_vocab_size_multiple", 1)
-    config.vocab_size = (math.ceil(config.vocab_size / pad_vocab_size_multiple) * pad_vocab_size_multiple)
+    config = AutoConfig.from_pretrained(
+        'gpt2',
+        vocab_size=(math.ceil(config.vocab_size / pad_vocab_size_multiple) * pad_vocab_size_multiple),
+        n_ctx=config.max_seq_length,
+        bos_token_id=config.bos_token_id,
+        eos_token_id=config.eos_token_id,
+    )
 
     updated_state_dict = inv_remap_state_dict_gpt2_FA_hf(model.state_dict())
     new_model = GPT2LMHeadModel(config)

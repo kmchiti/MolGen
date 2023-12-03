@@ -18,9 +18,9 @@ num_train_epochs: 5
 optim: "adamw_torch"
 per_device_eval_batch_size: 1024
 per_device_train_batch_size: 1024
-save_steps: 10000
+save_steps: 1000
 save_strategy: "steps"
-save_total_limit: 20
+save_total_limit: 5
 torch_compile: false
 warmup_ratio: 0.0
 weight_decay: 0.01
