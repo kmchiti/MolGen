@@ -3,4 +3,3 @@ max_seq_length: 64
 vocab_size: 30002
 bos_token_id: "<bos>"
 eos_token_id: "<eos>"
-use_flash_attention_2: false

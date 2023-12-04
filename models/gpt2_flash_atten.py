@@ -1,7 +1,6 @@
 from abc import ABC
 from transformers import GPT2Config
 from typing import Optional
-from einops import rearrange
 from collections import OrderedDict, namedtuple
 from transformers.modeling_outputs import CausalLMOutputWithCrossAttentions
 import torch
@@ -21,6 +20,11 @@ try:
     from flash_attn.utils.distributed import all_gather_raw
 except ImportError:
     all_gather_raw = None
+
+try:
+    from einops import rearrange
+except ImportError:
+    rearrange = None
 
 
 class GPT2MolGen_flash_atten(GPTLMHeadModel, ABC):
@@ -43,6 +47,7 @@ class GPT2MolGen_flash_atten(GPTLMHeadModel, ABC):
             rotary_emb_base: float = 10000.0,
             rotary_emb_scale_base: float = None,
             rotary_emb_interleaved: bool = True,
+            activation_function: Optional[float] = "gelu_new",
 
     ):
         config = GPT2Config(
@@ -62,6 +67,7 @@ class GPT2MolGen_flash_atten(GPTLMHeadModel, ABC):
             rotary_emb_base=rotary_emb_base,
             rotary_emb_scale_base=rotary_emb_scale_base,
             rotary_emb_interleaved=rotary_emb_interleaved,
+            activation_function=activation_function,
         )
 
         GPTLMHeadModel.__init__(self, config)

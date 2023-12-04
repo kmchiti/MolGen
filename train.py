@@ -63,6 +63,7 @@ def entrypoint(cfg: DictConfig):
     if is_world_process_zero(train_args):
         print('save remapped HF model to:', os.path.join(output_dir, 'HF'))
         save_HF_model(model, model.config, os.path.join(output_dir, 'HF'))
+        datamodule.tokenizer.save_pretrained(os.path.join(output_dir, 'HF'))
 
 
 if __name__ == "__main__":

@@ -10,7 +10,7 @@ class GPT2MolGen(GPT2LMHeadModel, ABC):
             vocab_size: Optional[int] = 30002,
             bos_token_id: Optional[str] = "<bos>",
             eos_token_id: Optional[str] = "<eos>",
-            use_flash_attention_2: Optional[bool] = False,
+            activation_function: Optional[float] = "gelu_new",
     ):
         config = AutoConfig.from_pretrained(
                             model_name_or_path,
@@ -18,6 +18,6 @@ class GPT2MolGen(GPT2LMHeadModel, ABC):
                             n_ctx=max_seq_length,
                             bos_token_id=bos_token_id,
                             eos_token_id=eos_token_id,
-                            use_flash_attention_2=use_flash_attention_2,
+                            activation_function=activation_function,
                     )
         GPT2LMHeadModel.__init__(self, config)
