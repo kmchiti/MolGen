@@ -36,7 +36,13 @@ class MolGenDataModule(object):
         self.data_collator = None
         self.eval_dataset = None
         self.train_dataset = None
-        self.tokenizer = None
+        # Load tokenizer
+        tokenizer = PreTrainedTokenizerFast(tokenizer_file=self.tokenizer_path)
+        tokenizer.add_special_tokens({"additional_special_tokens": ["<bos>", "<eos>"]})  # type: ignore
+        tokenizer.eos_token = "<eos>"
+        tokenizer.bos_token = "<bos>"
+        tokenizer.pad_token = tokenizer.eos_token
+        self.tokenizer = tokenizer
 
     def _dataset_available(self):
         return os.path.exists(self.tokenizer_path) and os.path.exists(self.dataset_path[:-1])
@@ -62,14 +68,6 @@ class MolGenDataModule(object):
         if not self._dataset_available():
             warnings.warn('dataset is not available! download the dataset')
             self.download_dataset()
-
-        # Load tokenizer
-        tokenizer = PreTrainedTokenizerFast(tokenizer_file=self.tokenizer_path)
-        tokenizer.add_special_tokens({"additional_special_tokens": ["<bos>", "<eos>"]})  # type: ignore
-        tokenizer.eos_token = "<eos>"
-        tokenizer.bos_token = "<bos>"
-        tokenizer.pad_token = tokenizer.eos_token
-        self.tokenizer = tokenizer
 
         # Load dataset
         dataset = load_dataset(
@@ -116,13 +114,13 @@ class MolGenDataModule(object):
             fn_kwargs={
                 "max_length": self.max_seq_length,
                 "column": "SMILES",
-                "tokenizer": tokenizer,
+                "tokenizer": self.tokenizer,
             },
         )
 
         # Create data collator
         data_collator = DataCollatorForLanguageModeling(
-            tokenizer=tokenizer, mlm=False
+            tokenizer=self.tokenizer, mlm=False
         )
 
         # Create train and validation datasets
