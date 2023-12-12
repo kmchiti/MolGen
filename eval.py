@@ -223,6 +223,11 @@ def entrypoint(cfg: DictConfig):
     model.load_state_dict(checkpoint)
     model = model.to(dtype=torch.bfloat16, device='cuda')
 
+    if cfg.wandb_logs:
+        wandb.init(entity=cfg.wandb.entity, project=cfg.wandb.project,
+                   name=exp_name, config=OmegaConf.to_container(cfg),
+                   tags=cfg.wandb.tags, mode=cfg.wandb.mode)
+
     # Generate SMILES and calculate metrics
     generated_smiles = generate_smiles(
         model,
@@ -235,7 +240,7 @@ def entrypoint(cfg: DictConfig):
         cfg.eval.batch_size,
         device=torch.device('cuda')
     )
-    metrics = get_all_metrics(generated_smiles)
+    metrics = get_all_metrics(generated_smiles, n_jobs=cfg.eval.preprocess_num_jobs)
     if cfg.wandb_logs:
         wandb.log(metrics)
 
