@@ -46,6 +46,8 @@ def creat_unique_experiment_name(config: DictConfig) -> str:
         str: A unique experiment name.
     """
     _config = OmegaConf.to_container(copy.deepcopy(config))
+    if 'eval' in _config.keys():
+        _config.pop('eval', None)
     model_arch = _config['model']['model_name_or_path']
     _config = unroll_configs(_config)
     # Convert the unrolled dictionary to a JSON string and hash it
