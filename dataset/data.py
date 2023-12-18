@@ -38,10 +38,10 @@ class MolGenDataModule(object):
         self.train_dataset = None
         # Load tokenizer
         tokenizer = PreTrainedTokenizerFast(tokenizer_file=self.tokenizer_path)
-        tokenizer.add_special_tokens({"additional_special_tokens": ["<bos>", "<eos>"]})  # type: ignore
+        tokenizer.add_special_tokens({"additional_special_tokens": ["<bos>", "<eos>", "[PAD]"]})  # type: ignore
         tokenizer.eos_token = "<eos>"
         tokenizer.bos_token = "<bos>"
-        tokenizer.pad_token = tokenizer.eos_token
+        tokenizer.pad_token = "[PAD]"
         self.tokenizer = tokenizer
 
     def _dataset_available(self):
