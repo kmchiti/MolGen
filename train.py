@@ -38,7 +38,6 @@ def entrypoint(cfg: DictConfig):
 
     # Initialize trainer
     if cfg.wandb_logs:
-        os.environ["WANDB_DISABLED"] = "true"
         train_args = TrainingArguments(**cfg.trainer, output_dir=output_dir, data_seed=cfg.seed,
                                        seed=cfg.seed, logging_dir=output_dir)
         if is_world_process_zero(train_args):

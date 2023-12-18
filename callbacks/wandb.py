@@ -17,7 +17,7 @@ class WandbCallback(TrainerCallback):
     A [`TrainerCallback`] that logs metrics, media, model checkpoints to [Weight and Biases](https://www.wandb.com/).
     """
 
-    def __init__(self, entity: str, project: str, name: str, config: dict, tags: list, mode: str= 'online',
+    def __init__(self, model, entity: str, project: str, name: str, config: dict, tags: list, mode: str= 'online',
                  run_evaluation: bool = False, log_weight_grad_norm: bool = False):
         has_wandb = importlib.util.find_spec("wandb") is not None
         if not has_wandb:
@@ -35,6 +35,7 @@ class WandbCallback(TrainerCallback):
         self.mode = mode
         self.run_evaluation = run_evaluation
         self.log_weight_grad_norm = log_weight_grad_norm
+        self.model = model
 
     def setup(self, args, state, model, **kwargs):
         """
@@ -167,13 +168,13 @@ class WandbCallback(TrainerCallback):
         """
         pass
 
-    def on_substep_end(self, args, state, control, model=None, **kwargs):
+    def on_substep_end(self, args, state, control, **kwargs):
         if self._wandb is None:
             return
         if not self._initialized:
-            self.setup(args, state, model)
+            self.setup(args, state, self.model)
         if state.is_world_process_zero:
-            logs = get_weight_grad_norm(model)
+            logs = get_weight_grad_norm(self.model)
             self._wandb.log({**logs, "train/global_step": state.global_step})
 
 

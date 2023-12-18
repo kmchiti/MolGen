@@ -92,6 +92,7 @@ FSDP_MODEL_NAME = "pytorch_model_fsdp"
 DEFAULT_CALLBACKS = [DefaultFlowCallback]
 DEFAULT_PROGRESS_CALLBACK = ProgressCallback
 
+
 class MyTrainer(Trainer):
     def __init__(self,
                  model: Union[PreTrainedModel, nn.Module] = None,
@@ -106,7 +107,7 @@ class MyTrainer(Trainer):
                  optimizers: Tuple[torch.optim.Optimizer, torch.optim.lr_scheduler.LambdaLR] = (None, None),
                  preprocess_logits_for_metrics: Optional[
                      Callable[[torch.Tensor, torch.Tensor], torch.Tensor]] = None,
-                 evaluation_args: Optional[Dict] = None,):
+                 evaluation_args: Optional[Dict] = None, ):
         super().__init__(model=model, args=args, data_collator=data_collator, train_dataset=train_dataset,
                          eval_dataset=eval_dataset, tokenizer=tokenizer, model_init=model_init,
                          compute_metrics=compute_metrics, callbacks=callbacks, optimizers=optimizers,
@@ -114,7 +115,7 @@ class MyTrainer(Trainer):
         self.is_fsdp_xla_enabled = args.fsdp_config["xla"]  # ?!?!?!?!
         self.args.include_num_input_tokens_seen = False  # ?!?!!?
 
-        default_callbacks = DEFAULT_CALLBACKS # + get_reporting_integration_callbacks(self.args.report_to)
+        default_callbacks = DEFAULT_CALLBACKS  # + get_reporting_integration_callbacks(self.args.report_to)
         callbacks = default_callbacks if callbacks is None else default_callbacks + callbacks
         self.callback_handler = CallbackHandler(
             callbacks, self.model, self.tokenizer, self.optimizer, self.lr_scheduler
@@ -462,6 +463,12 @@ class MyTrainer(Trainer):
                     if is_last_step_and_steps_less_than_grad_acc:
                         self.accelerator.gradient_state._set_sync_gradients(True)
 
+                    #########################################
+                    ############# Modified here #############
+                    #########################################
+                    self.control = self.callback_handler.on_substep_end(args, self.state, self.control)
+                    #########################################
+
                     # Gradient clipping
                     if args.max_grad_norm is not None and args.max_grad_norm > 0:
                         # deepspeed does its own clipping
@@ -495,11 +502,7 @@ class MyTrainer(Trainer):
 
                     self._maybe_log_save_evaluate(tr_loss, model, trial, epoch, ignore_keys_for_eval)
                 else:
-                    #########################################
-                    ############# Modified here #############
-                    #########################################
-                    self.control = self.callback_handler.on_substep_end(args, self.state, self.control, self.model)
-                    #########################################
+                    self.control = self.callback_handler.on_substep_end(args, self.state, self.control)
 
                 if self.control.should_epoch_stop or self.control.should_training_stop:
                     break
