@@ -18,7 +18,7 @@ def _checkpoint_is_available(trainer):
     return checkpoint_found
 
 
-@hydra.main(version_base=None, config_path="configs", config_name="config")
+@hydra.main(version_base=None, config_path="configs", config_name="config_FA")
 def entrypoint(cfg: DictConfig):
     # Initialize setup
     set_seed(cfg.seed)
@@ -38,8 +38,9 @@ def entrypoint(cfg: DictConfig):
 
     # Initialize trainer
     if cfg.wandb_logs:
+        os.environ["WANDB_DISABLED"] = "true"
         train_args = TrainingArguments(**cfg.trainer, output_dir=output_dir, data_seed=cfg.seed,
-                                       seed=cfg.seed, logging_dir=output_dir, report_to=['wandb'])
+                                       seed=cfg.seed, logging_dir=output_dir)
         if is_world_process_zero(train_args):
             wandb_callback = WandbCallback(entity=cfg.wandb.entity, project=cfg.wandb.project,
                                            name=exp_name, config=OmegaConf.to_container(cfg),
@@ -48,7 +49,7 @@ def entrypoint(cfg: DictConfig):
     else:
         wandb_callback = None
         train_args = TrainingArguments(**cfg.trainer, output_dir=output_dir, data_seed=cfg.seed,
-                                       seed=cfg.seed, logging_dir=output_dir, report_to=None)
+                                       seed=cfg.seed, logging_dir=output_dir)
 
     trainer = MyTrainer(model=model,
                         args=train_args,
@@ -56,7 +57,7 @@ def entrypoint(cfg: DictConfig):
                         data_collator=datamodule.data_collator,
                         train_dataset=datamodule.train_dataset,
                         eval_dataset=datamodule.eval_dataset,
-                        callbacks=wandb_callback,
+                        callbacks=[wandb_callback],
                         evaluation_args=cfg.eval)
 
     # Train model

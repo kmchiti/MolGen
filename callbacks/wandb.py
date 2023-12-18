@@ -5,6 +5,8 @@ import tempfile
 import numbers
 from pathlib import Path
 import os
+import importlib.metadata
+import importlib.util
 
 
 logger = logging.get_logger(__name__)
@@ -17,7 +19,7 @@ class WandbCallback(TrainerCallback):
 
     def __init__(self, entity: str, project: str, name: str, config: dict, tags: list, mode: str= 'online',
                  run_evaluation: bool = False, log_weight_grad_norm: bool = False):
-        has_wandb = is_wandb_available()
+        has_wandb = importlib.util.find_spec("wandb") is not None
         if not has_wandb:
             raise RuntimeError("WandbCallback requires wandb to be installed. Run `pip install wandb`.")
         if has_wandb:

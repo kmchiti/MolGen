@@ -17,6 +17,9 @@ from packaging import version
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, Union
 from eval import generate_smiles, get_all_metrics
 
+from transformers.trainer_callback import DefaultFlowCallback
+from transformers.integrations import get_reporting_integration_callbacks
+
 from transformers.trainer_callback import (
     CallbackHandler,
     DefaultFlowCallback,
@@ -86,7 +89,8 @@ OPTIMIZER_NAME_BIN = "optimizer.bin"
 SCHEDULER_NAME = "scheduler.pt"
 SCALER_NAME = "scaler.pt"
 FSDP_MODEL_NAME = "pytorch_model_fsdp"
-
+DEFAULT_CALLBACKS = [DefaultFlowCallback]
+DEFAULT_PROGRESS_CALLBACK = ProgressCallback
 
 class MyTrainer(Trainer):
     def __init__(self,
@@ -107,6 +111,16 @@ class MyTrainer(Trainer):
                          eval_dataset=eval_dataset, tokenizer=tokenizer, model_init=model_init,
                          compute_metrics=compute_metrics, callbacks=callbacks, optimizers=optimizers,
                          preprocess_logits_for_metrics=preprocess_logits_for_metrics)
+        self.is_fsdp_xla_enabled = args.fsdp_config["xla"]  # ?!?!?!?!
+        self.args.include_num_input_tokens_seen = False  # ?!?!!?
+
+        default_callbacks = DEFAULT_CALLBACKS # + get_reporting_integration_callbacks(self.args.report_to)
+        callbacks = default_callbacks if callbacks is None else default_callbacks + callbacks
+        self.callback_handler = CallbackHandler(
+            callbacks, self.model, self.tokenizer, self.optimizer, self.lr_scheduler
+        )
+        self.add_callback(PrinterCallback if self.args.disable_tqdm else DEFAULT_PROGRESS_CALLBACK)
+
         self.evaluation_args = evaluation_args
 
     def _inner_training_loop(
