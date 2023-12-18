@@ -4,6 +4,7 @@ defaults:
   - dataset: chem_smiles_FA
   - model: gpt2_FA
   - trainer: hf_trainer_FA
+  - eval: basic
 
 seed: 42
 save_path: './save'

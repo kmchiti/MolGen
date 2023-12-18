@@ -22,6 +22,8 @@ class MolGenDataModule(object):
         dataloader_num_workers: int,
         preprocess_num_workers: int,
         folder_url: Optional[str] = None,
+        validation_size: Optional[float] = 0.1,
+        val_split_seed: Optional[int] = 42,
     ):
         super().__init__()
         self.tokenizer_path = os.path.join(data_root, tokenizer_path)
@@ -32,6 +34,8 @@ class MolGenDataModule(object):
         self.batch_size = batch_size
         self.dataloader_num_workers = dataloader_num_workers
         self.preprocess_num_workers = preprocess_num_workers
+        self.validation_size = validation_size
+        self.val_split_seed = val_split_seed
         self.folder_url = folder_url
         self.data_collator = None
         self.eval_dataset = None
@@ -77,7 +81,7 @@ class MolGenDataModule(object):
                 {"CID": Value(dtype="string"), "SMILES": Value(dtype="string")}
             ),
         )
-        dataset = dataset["train"].train_test_split(test_size=0.1, seed=42)  # type: ignore
+        dataset = dataset["train"].train_test_split(test_size=self.validation_size, seed=self.val_split_seed)  # type: ignore
 
         def tokenize_function(
             element: dict,

@@ -8,3 +8,5 @@ batch_size: 512
 dataloader_num_workers: 4
 preprocess_num_workers: 24
 folder_url: "https://drive.google.com/drive/folders/1qLFWbdixlIUimdi5brdfXlv3Qiw8UAp3"
+validation_size: 0.1
+val_split_seed: 42
