@@ -168,5 +168,5 @@ class WandbCallback(TrainerCallback):
         """
         Event called after an evaluation phase.
         """
-        self._wandb.log({**logs, "train/global_step": state.global_step})
+        pass
 

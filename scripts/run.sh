@@ -8,7 +8,6 @@
 #SBATCH --mem-per-gpu=32G               # memory per gpu
 
 module load libffi
-# source ../../ENV/bin/activate
 source ~/anaconda3/bin/activate
 conda activate my-rdkit-env
 export HF_HOME=$SCRATCH/hf_home

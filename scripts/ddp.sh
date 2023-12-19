@@ -11,7 +11,8 @@
 #SBATCH --constraint=80gb               # constraints
 
 module load libffi
-source ../../ENV/bin/activate
+source ~/anaconda3/bin/activate
+conda activate my-rdkit-env
 export HF_HOME=$SCRATCH/hf_home
 
 torchrun --nproc_per_node=4 train.py
