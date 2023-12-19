@@ -101,9 +101,11 @@ def get_all_metrics(
     ptest=None,
     ptest_scaffolds=None,
     train=None,
+    report: List[str] = ['all'],
 ):
     """Computes all available metrics between test (scaffold test) and generated sets of SMILES.
 
+    :param report:
     :param gen: list of generated SMILES
     :param k: int or list with values for unique@k. Will calculate number of unique molecules in the first k molecules. Default [1000, 10000]
     :param n_jobs: number of workers for parallel processing
@@ -156,45 +158,52 @@ def get_all_metrics(
             close_pool = True
         else:
             pool = 1
-    metrics["valid"] = fraction_valid(gen, n_jobs=pool)  # type: ignore
-    gen = remove_invalid(gen, canonize=True)
-    if not isinstance(k, (list, tuple)):
-        k = [k]
-    for _k in k:
-        metrics[f"unique@{_k}"] = fraction_unique(gen, _k, pool)  # type: ignore
+    if "valid" in report or "all" in report:
+        metrics["valid"] = fraction_valid(gen, n_jobs=pool)  # type: ignore
 
-    if ptest is None:
-        ptest = compute_intermediate_statistics(
-            test, n_jobs=n_jobs, device=device, batch_size=batch_size, pool=pool
-        )
-    if test_scaffolds is not None and ptest_scaffolds is None:
-        ptest_scaffolds = compute_intermediate_statistics(
-            test_scaffolds,
-            n_jobs=n_jobs,
-            device=device,
-            batch_size=batch_size,
-            pool=pool,
-        )
-    mols = mapper(pool)(get_mol, gen)
-    kwargs = {"n_jobs": pool, "device": device, "batch_size": batch_size}
-    metrics["SNN/Test"] = SNNMetric(**kwargs)(gen=mols, pref=ptest["SNN"])
-    metrics["Frag/Test"] = FragMetric(**kwargs)(gen=mols, pref=ptest["Frag"])
-    metrics["Scaf/Test"] = ScafMetric(**kwargs)(gen=mols, pref=ptest["Scaf"])
-    if ptest_scaffolds is not None:
-        metrics["SNN/TestSF"] = SNNMetric(**kwargs)(gen=mols, pref=ptest_scaffolds["SNN"])
-        metrics["Frag/TestSF"] = FragMetric(**kwargs)(gen=mols, pref=ptest_scaffolds["Frag"])
-        metrics["Scaf/TestSF"] = ScafMetric(**kwargs)(gen=mols, pref=ptest_scaffolds["Scaf"])
+    if "unique@" in report or "all" in report:
+        gen = remove_invalid(gen, canonize=True)
+        if not isinstance(k, (list, tuple)):
+            k = [k]
+        for _k in k:
+            metrics[f"unique@{_k}"] = fraction_unique(gen, _k, pool)  # type: ignore
 
-    metrics["IntDiv"] = internal_diversity(mols, pool, device=device)  # type: ignore
-    metrics["IntDiv2"] = internal_diversity(mols, pool, device=device, p=2)  # type: ignore
-    metrics["Filters"] = fraction_passes_filters(mols, pool)  # type: ignore
+    if "SNN" in report or "all" in report:
+        if ptest is None:
+            ptest = compute_intermediate_statistics(
+                test, n_jobs=n_jobs, device=device, batch_size=batch_size, pool=pool
+            )
+        if test_scaffolds is not None and ptest_scaffolds is None:
+            ptest_scaffolds = compute_intermediate_statistics(
+                test_scaffolds,
+                n_jobs=n_jobs,
+                device=device,
+                batch_size=batch_size,
+                pool=pool,
+            )
+        mols = mapper(pool)(get_mol, gen)
+        kwargs = {"n_jobs": pool, "device": device, "batch_size": batch_size}
+        metrics["SNN/Test"] = SNNMetric(**kwargs)(gen=mols, pref=ptest["SNN"])
+        metrics["Frag/Test"] = FragMetric(**kwargs)(gen=mols, pref=ptest["Frag"])
+        metrics["Scaf/Test"] = ScafMetric(**kwargs)(gen=mols, pref=ptest["Scaf"])
+        if ptest_scaffolds is not None:
+            metrics["SNN/TestSF"] = SNNMetric(**kwargs)(gen=mols, pref=ptest_scaffolds["SNN"])
+            metrics["Frag/TestSF"] = FragMetric(**kwargs)(gen=mols, pref=ptest_scaffolds["Frag"])
+            metrics["Scaf/TestSF"] = ScafMetric(**kwargs)(gen=mols, pref=ptest_scaffolds["Scaf"])
 
-    # Properties
-    for name, func in [("logP", logP), ("SA", SA), ("QED", QED), ("weight", weight)]:
-        metrics[name] = WassersteinMetric(func, **kwargs)(gen=mols, pref=ptest[name])
+    if "IntDiv" in report or "all" in report:
+        metrics["IntDiv"] = internal_diversity(mols, pool, device=device)  # type: ignore
+        metrics["IntDiv2"] = internal_diversity(mols, pool, device=device, p=2)  # type: ignore
+        metrics["Filters"] = fraction_passes_filters(mols, pool)  # type: ignore
 
-    if train is not None:
-        metrics["Novelty"] = novelty(mols, train, pool)  # type: ignore
+    if "logP" in report or "all" in report:
+        # Properties
+        for name, func in [("logP", logP), ("SA", SA), ("QED", QED), ("weight", weight)]:
+            metrics[name] = WassersteinMetric(func, **kwargs)(gen=mols, pref=ptest[name])
+
+    if "Novelty" in report or "all" in report:
+        if train is not None:
+            metrics["Novelty"] = novelty(mols, train, pool)  # type: ignore
     enable_rdkit_log()
     if close_pool:
         pool.close()  # type: ignore

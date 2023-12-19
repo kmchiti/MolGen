@@ -634,7 +634,7 @@ class MyTrainer(Trainer):
             self.evaluation_args.batch_size,
             device=torch.device('cuda')
         )
-        metrics = get_all_metrics(generated_smiles, n_jobs=self.evaluation_args.preprocess_num_jobs)
+        metrics = get_all_metrics(generated_smiles, n_jobs=self.evaluation_args.preprocess_num_jobs, report=["valid"])
         for k in metrics.keys():
             metrics[f"eval/{k}"] = metrics[k]
         self.control = self.callback_handler.on_evaluate(self.args, self.state, self.control, metrics)
