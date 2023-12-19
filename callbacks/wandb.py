@@ -140,6 +140,8 @@ class WandbCallback(TrainerCallback):
             self.setup(args, state, model)
         if state.is_world_process_zero:
             logs = rewrite_logs(logs)
+            logs["model/weight_norm"] = state.weight_norm
+            logs["model/grad_norm"] = state.grad_norm
             self._wandb.log({**logs, "train/global_step": state.global_step})
 
     def on_save(self, args, state, control, **kwargs):
@@ -162,49 +164,9 @@ class WandbCallback(TrainerCallback):
             artifact.add_dir(artifact_path)
             self._wandb.log_artifact(artifact, aliases=[f"checkpoint-{state.global_step}"])
 
-    def on_evaluate(self, args, state, control, **kwargs):
+    def on_evaluate(self, args, state, control, logs=None, **kwarg):
         """
         Event called after an evaluation phase.
         """
-        pass
+        self._wandb.log({**logs, "train/global_step": state.global_step})
 
-    def on_substep_end(self, args, state, control, **kwargs):
-        if self._wandb is None:
-            return
-        if not self._initialized:
-            self.setup(args, state, self.model)
-        if state.is_world_process_zero:
-            logs = get_weight_grad_norm(self.model)
-            self._wandb.log({**logs, "train/global_step": state.global_step})
-
-
-def get_weight_grad_norm(model):
-    weight_norm, grad_norm = 0, 0
-    for param in model.parameters():
-        grad_norm += param.grad.data.norm(2).item() ** 2 if param.grad is not None else 0
-        weight_norm += param.data.norm(2).item() ** 2
-    res = {"model/weight_norm": weight_norm**0.5, "model/grad_norm": grad_norm**0.5}
-    return res
-
-
-# from typing import Any, Dict, List, NamedTuple, Optional, Tuple, Union
-# import numpy as np
-# class EvalLoopOutput(NamedTuple):
-#     predictions: Union[np.ndarray, Tuple[np.ndarray]]
-#     label_ids: Optional[Union[np.ndarray, Tuple[np.ndarray]]]
-#     metrics: Optional[Dict[str, float]]
-#     num_samples: Optional[int]
-#
-#  # Metrics!
-#         if self.compute_metrics is not None and all_preds is not None and all_labels is not None:
-#             if args.include_inputs_for_metrics:
-#                 metrics = self.compute_metrics(
-#                     EvalPrediction(predictions=all_preds, label_ids=all_labels, inputs=all_inputs)
-#                 )
-#             else:
-#                 metrics = self.compute_metrics(EvalPrediction(predictions=all_preds, label_ids=all_labels))
-#         else:
-#             metrics = {}
-#
-#         # To be JSON-serializable, we need to remove numpy types or zero-d tensors
-#         metrics = denumpify_detensorize(metrics)

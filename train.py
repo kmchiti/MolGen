@@ -41,7 +41,7 @@ def entrypoint(cfg: DictConfig):
         train_args = TrainingArguments(**cfg.trainer, output_dir=output_dir, data_seed=cfg.seed,
                                        seed=cfg.seed, logging_dir=output_dir)
         if is_world_process_zero(train_args):
-            wandb_callback = WandbCallback(entity=cfg.wandb.entity, project=cfg.wandb.project,
+            wandb_callback = WandbCallback(model=model, entity=cfg.wandb.entity, project=cfg.wandb.project,
                                            name=exp_name, config=OmegaConf.to_container(cfg),
                                            tags=cfg.wandb.tags, mode=cfg.wandb.mode)
 

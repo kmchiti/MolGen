@@ -16,6 +16,7 @@ import torch.distributed as dist
 from packaging import version
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, Union
 from eval import generate_smiles, get_all_metrics
+from utils import get_weight_grad_norm
 
 from transformers.trainer_callback import DefaultFlowCallback
 from transformers.integrations import get_reporting_integration_callbacks
@@ -123,6 +124,8 @@ class MyTrainer(Trainer):
         self.add_callback(PrinterCallback if self.args.disable_tqdm else DEFAULT_PROGRESS_CALLBACK)
 
         self.evaluation_args = evaluation_args
+        self.state.weight_norm = None
+        self.state.grad_norm = None
 
     def _inner_training_loop(
             self, batch_size=None, args=None, resume_from_checkpoint=None, trial=None, ignore_keys_for_eval=None
@@ -466,7 +469,7 @@ class MyTrainer(Trainer):
                     #########################################
                     ############# Modified here #############
                     #########################################
-                    self.control = self.callback_handler.on_substep_end(args, self.state, self.control)
+                    self.state.weight_norm, self.state.grad_norm = get_weight_grad_norm(model)
                     #########################################
 
                     # Gradient clipping
@@ -632,7 +635,8 @@ class MyTrainer(Trainer):
             device=torch.device('cuda')
         )
         metrics = get_all_metrics(generated_smiles, n_jobs=self.evaluation_args.preprocess_num_jobs)
-
+        for k in metrics.keys():
+            metrics[f"eval/{k}"] = metrics[k]
         self.control = self.callback_handler.on_evaluate(self.args, self.state, self.control, metrics)
 
         return metrics

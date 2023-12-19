@@ -157,3 +157,11 @@ def save_HF_model(model, config: GPT2Config, output_dir: str):
     new_model.load_state_dict(network_kvpair)
     new_model.save_pretrained(output_dir)
 
+
+def get_weight_grad_norm(model):
+    weight_norm, grad_norm = 0, 0
+    for i, param in enumerate(model.parameters()):
+        grad_norm += param.grad.data.norm(2).item() ** 2 if param.grad is not None else 0
+        weight_norm += param.data.norm(2).item() ** 2
+    return weight_norm**0.5, grad_norm**0.5
+
