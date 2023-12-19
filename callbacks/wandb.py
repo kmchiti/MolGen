@@ -27,6 +27,16 @@ class WandbCallback(TrainerCallback):
 
             self._wandb = wandb
         self._initialized = False
+        # log model
+        if os.getenv("WANDB_LOG_MODEL", "FALSE").upper() in ENV_VARS_TRUE_VALUES.union({"TRUE"}):
+            DeprecationWarning(
+                f"Setting `WANDB_LOG_MODEL` as {os.getenv('WANDB_LOG_MODEL')} is deprecated and will be removed in "
+                "version 5 of transformers. Use one of `'end'` or `'checkpoint'` instead."
+            )
+            logger.info(f"Setting `WANDB_LOG_MODEL` from {os.getenv('WANDB_LOG_MODEL')} to `end` instead")
+            self._log_model = "end"
+        else:
+            self._log_model = os.getenv("WANDB_LOG_MODEL", "false").lower()
         self.entity = entity
         self.project = project
         self.name = name
