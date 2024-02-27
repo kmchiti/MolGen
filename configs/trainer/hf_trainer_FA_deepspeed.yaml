@@ -26,3 +26,25 @@ torch_compile: false
 warmup_steps: 1000
 weight_decay: 0.01
 save_spec_steps: 10000
+deepspeed:
+  zero_optimization:
+    stage: 0
+  optimizer:
+    type: 'AdamW'
+    params:
+      lr: 'auto'
+      betas: 'auto'
+      eps: 'auto'
+      weight_decay: 'auto'
+  scheduler:
+    type: 'WarmupDecayLR'
+    params:
+      last_batch_iteration: -1
+      total_num_steps: 'auto'
+      warmup_min_lr: 'auto'
+      warmup_max_lr: 'auto'
+      warmup_num_steps: 'auto'
+  gradient_accumulation_steps: 'auto'
+  gradient_clipping: 'auto'
+  train_batch_size: 'auto'
+  train_micro_batch_size_per_gpu: 'auto'

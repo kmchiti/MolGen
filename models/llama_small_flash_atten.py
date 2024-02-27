@@ -35,21 +35,23 @@ class Llama_small_flash_atten(GPTLMHeadModel, ABC):
             model_name_or_path: str,
             max_seq_length: Optional[int],
             vocab_size: Optional[int],
+            hidden_size: int,
+            num_hidden_layers: int,
+            num_attention_heads: int,
+            intermediate_size: int,
             bos_token_id: Optional[str],
             eos_token_id: Optional[str],
-            pad_token_id: Optional[str],
             use_flash_attn: bool = True,
             fused_bias_fc: bool = True,
             fused_mlp: bool = False,
             fused_dropout_add_ln: bool = True,
             residual_in_fp32: bool = True,
-            pad_vocab_size_multiple: int = None,
     ):
         config = LlamaConfig(n_ctx=max_seq_length,
-                             hidden_size=640,
-                             num_hidden_layers=24,
-                             num_attention_heads=10,
-                             intermediate_size=2560,
+                             hidden_size=hidden_size,
+                             num_hidden_layers=num_hidden_layers,
+                             num_attention_heads=num_attention_heads,
+                             intermediate_size=intermediate_size,
                              vocab_size=vocab_size,
                              bos_token_id=bos_token_id,
                              eos_token_id=eos_token_id)
@@ -59,7 +61,7 @@ class Llama_small_flash_atten(GPTLMHeadModel, ABC):
         config.fused_mlp = fused_mlp
         config.fused_dropout_add_ln = fused_dropout_add_ln
         config.residual_in_fp32 = residual_in_fp32
-        config.pad_vocab_size_multiple = pad_vocab_size_multiple
+        # config.pad_vocab_size_multiple = pad_vocab_size_multiple
 
         GPTLMHeadModel.__init__(self, config)
 
