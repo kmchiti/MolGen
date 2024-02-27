@@ -45,7 +45,7 @@ class MolGenDataModule(object):
         tokenizer.add_special_tokens({"additional_special_tokens": ["<bos>", "<eos>", "[PAD]"]})  # type: ignore
         tokenizer.eos_token = "<eos>"
         tokenizer.bos_token = "<bos>"
-        tokenizer.pad_token = "[PAD]"
+        tokenizer.pad_token = tokenizer.eos_token
         self.tokenizer = tokenizer
 
     def _dataset_available(self):
