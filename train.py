@@ -1,12 +1,14 @@
 import hydra
 from omegaconf import DictConfig, OmegaConf
 from transformers import set_seed, Trainer, TrainingArguments
-from trainer import MyTrainer
+from trainer import MyHFTrainer, MyTrainingArguments
 from callbacks import WandbCallback
 from dataset import MolGenDataModule
 from models import GPT2MolGen, GPT2MolGen_flash_atten
 from utils import creat_unique_experiment_name, is_world_process_zero, save_HF_model
-import wandb
+import torch
+from transformers import LlamaForCausalLM, LlamaConfig
+
 import os
 
 
@@ -33,31 +35,35 @@ def entrypoint(cfg: DictConfig):
     # Initialize model
     if cfg.model.model_name_or_path == 'gpt2_flash_atten':
         model = GPT2MolGen_flash_atten(**cfg.model)
+    elif cfg.model.model_name_or_path in ['llama', 'llama_flash_attention']:
+        model_cfg = LlamaConfig(**cfg.model)
+        model = LlamaForCausalLM(model_cfg)
     else:
         model = GPT2MolGen(**cfg.model)
 
     # Initialize trainer
-    if cfg.wandb_logs:
-        train_args = TrainingArguments(**cfg.trainer, output_dir=output_dir, data_seed=cfg.seed,
-                                       seed=cfg.seed, logging_dir=output_dir)
-        # if is_world_process_zero(train_args):
-        wandb_callback = WandbCallback(model=model, entity=cfg.wandb.entity, project=cfg.wandb.project,
-                                       name=exp_name, config=OmegaConf.to_container(cfg),
-                                       tags=cfg.wandb.tags, mode=cfg.wandb.mode)
+    train_args = MyTrainingArguments(data_seed=cfg.seed, seed=cfg.seed, output_dir=output_dir,
+                                     logging_dir=output_dir, **cfg.trainer)
+    # enable TF32
+    if torch.cuda.is_available() and cfg.trainer.tf32:
+        torch.backends.cuda.matmul.allow_tf32 = True
+        torch.backends.cudnn.allow_tf32 = True
 
+    if cfg.wandb_logs:
+        wandb_callback = [WandbCallback(model=model, entity=cfg.wandb.entity, project=cfg.wandb.project,
+                                        name=exp_name, config=OmegaConf.to_container(cfg), tags=cfg.wandb.tags)]
     else:
         wandb_callback = None
-        train_args = TrainingArguments(**cfg.trainer, output_dir=output_dir, data_seed=cfg.seed,
-                                       seed=cfg.seed, logging_dir=output_dir)
 
-    trainer = MyTrainer(model=model,
-                        args=train_args,
-                        tokenizer=datamodule.tokenizer,
-                        data_collator=datamodule.data_collator,
-                        train_dataset=datamodule.train_dataset,
-                        eval_dataset=datamodule.eval_dataset,
-                        callbacks=[wandb_callback],
-                        evaluation_args=cfg.eval)
+    trainer = MyHFTrainer(model=model,
+                          args=train_args,
+                          callbacks=wandb_callback,
+                          tokenizer=datamodule.tokenizer,
+                          data_collator=datamodule.data_collator,
+                          train_dataset=datamodule.train_dataset,
+                          eval_dataset=datamodule.eval_dataset,
+                          evaluation_task=None,
+                          )
 
     # Train model
     if _checkpoint_is_available(trainer):

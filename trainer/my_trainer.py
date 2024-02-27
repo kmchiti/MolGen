@@ -1,7 +1,7 @@
 from transformers import Trainer
 from transformers.utils import logging, is_sagemaker_mp_enabled, is_accelerate_available, is_torch_tpu_available, \
     is_apex_available
-from transformers.trainer_utils import has_length, HPSearchBackend, speed_metrics, TrainOutput, EvalPrediction
+from transformers.trainer_utils import has_length, HPSearchBackend, speed_metrics, TrainOutput, EvalPrediction, PREFIX_CHECKPOINT_DIR
 from transformers.debug_utils import DebugOption, DebugUnderflowOverflow
 from transformers.integrations.deepspeed import deepspeed_init, deepspeed_load_checkpoint, is_deepspeed_available
 from transformers.trainer_pt_utils import get_model_param_count, get_dataloader_sampler
@@ -15,8 +15,7 @@ from transformers.tokenization_utils_base import PreTrainedTokenizerBase
 import torch.distributed as dist
 from packaging import version
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, Union
-from eval import generate_smiles, get_all_metrics
-from utils import get_weight_grad_norm
+from trainer import MyTrainingArguments
 
 from transformers.trainer_callback import DefaultFlowCallback
 from transformers.integrations import get_reporting_integration_callbacks
@@ -38,6 +37,7 @@ import torch
 from torch import nn
 import math
 import os
+import signal
 import sys
 import time
 import shutil
@@ -62,14 +62,14 @@ else:
 if is_accelerate_available():
     from accelerate import Accelerator, skip_first_batches
     from accelerate import __version__ as accelerate_version
-    from accelerate.utils import (
-        DistributedDataParallelKwargs,
-        GradientAccumulationPlugin,
-        load_fsdp_model,
-        load_fsdp_optimizer,
-        save_fsdp_model,
-        save_fsdp_optimizer,
-    )
+    # from accelerate.utils import (
+    #     DistributedDataParallelKwargs,
+    #     GradientAccumulationPlugin,
+    #     load_fsdp_model,
+    #     load_fsdp_optimizer,
+    #     save_fsdp_model,
+    #     save_fsdp_optimizer,
+    # )
 
     DATA_SAMPLERS = [RandomSampler]
     if version.parse(accelerate_version) > version.parse("0.23.0"):
@@ -94,10 +94,10 @@ DEFAULT_CALLBACKS = [DefaultFlowCallback]
 DEFAULT_PROGRESS_CALLBACK = ProgressCallback
 
 
-class MyTrainer(Trainer):
+class MyHFTrainer(Trainer):
     def __init__(self,
                  model: Union[PreTrainedModel, nn.Module] = None,
-                 args: TrainingArguments = None,
+                 args: MyTrainingArguments = None,
                  data_collator: Optional[DataCollator] = None,
                  train_dataset: Optional[Dataset] = None,
                  eval_dataset: Optional[Union[Dataset, Dict[str, Dataset]]] = None,
@@ -108,7 +108,7 @@ class MyTrainer(Trainer):
                  optimizers: Tuple[torch.optim.Optimizer, torch.optim.lr_scheduler.LambdaLR] = (None, None),
                  preprocess_logits_for_metrics: Optional[
                      Callable[[torch.Tensor, torch.Tensor], torch.Tensor]] = None,
-                 evaluation_args: Optional[Dict] = None, ):
+                 evaluation_task=None, ):
         super().__init__(model=model, args=args, data_collator=data_collator, train_dataset=train_dataset,
                          eval_dataset=eval_dataset, tokenizer=tokenizer, model_init=model_init,
                          compute_metrics=compute_metrics, callbacks=callbacks, optimizers=optimizers,
@@ -123,9 +123,10 @@ class MyTrainer(Trainer):
         )
         self.add_callback(PrinterCallback if self.args.disable_tqdm else DEFAULT_PROGRESS_CALLBACK)
 
-        self.evaluation_args = evaluation_args
+        self.evaluation_task = evaluation_task
         self.state.weight_norm = None
         self.state.grad_norm = None
+        # self.state.temp_ds_eval_on_step_end = 0
 
     def _inner_training_loop(
             self, batch_size=None, args=None, resume_from_checkpoint=None, trial=None, ignore_keys_for_eval=None
@@ -375,6 +376,20 @@ class MyTrainer(Trainer):
                     sampler = sampler if sampler is not None else []
                     _ = list(sampler)
 
+        #########################################
+        ############# Modified here #############
+        #########################################
+        # Save the model when receiving the signal SIGTERM
+        def handler(signum, frame):
+            print(f"Signal {signum} received on rank {self.accelerator.process_index}, checkpointing...")
+            # self.accelerator.save_state()
+            self._save_checkpoint(model, trial, metrics=None)
+            self.accelerator.wait_for_everyone()
+            print(f"Done on rank {self.accelerator.process_index}")
+            sys.exit(0)
+        signal.signal(signal.SIGTERM, handler)
+        #########################################
+
         total_batched_samples = 0
         for epoch in range(epochs_trained, num_train_epochs):
             epoch_iterator = train_dataloader
@@ -504,6 +519,12 @@ class MyTrainer(Trainer):
                     self.control = self.callback_handler.on_step_end(args, self.state, self.control)
 
                     self._maybe_log_save_evaluate(tr_loss, model, trial, epoch, ignore_keys_for_eval)
+
+                    #########################################
+                    ############# Modified here #############
+                    #########################################
+                    self._save_spec_checkpoint(trial)
+                    #########################################
                 else:
                     self.control = self.callback_handler.on_substep_end(args, self.state, self.control)
 
@@ -584,16 +605,11 @@ class MyTrainer(Trainer):
         # Wait for the checkpoint to be uploaded.
         self._finish_current_push()
 
-        # After training we make sure to retrieve back the original forward pass method
-        # for the embedding layer by removing the forward post hook.
-        if self.neftune_noise_alpha is not None:
-            self._deactivate_neftune(self.model)
-
         return TrainOutput(self.state.global_step, train_loss, metrics)
 
     def evaluate(
             self,
-            eval_dataset: Optional[Dataset] = None,
+            eval_dataset: Optional[Union[Dataset, Dict[str, Dataset]]] = None,
             ignore_keys: Optional[List[str]] = None,
             metric_key_prefix: str = "eval",
     ) -> Dict[str, float]:
@@ -606,10 +622,24 @@ class MyTrainer(Trainer):
         You can also subclass and override this method to inject custom behavior.
 
         Args:
-            eval_dataset (`Dataset`, *optional*):
+            eval_dataset (Union[`Dataset`, Dict[str, `Dataset`]), *optional*):
                 Pass a dataset if you wish to override `self.eval_dataset`. If it is a [`~datasets.Dataset`], columns
-                not accepted by the `model.forward()` method are automatically removed. It must implement the `__len__`
-                method.
+                not accepted by the `model.forward()` method are automatically removed. If it is a dictionary, it will
+                evaluate on each dataset, prepending the dictionary key to the metric name. Datasets must implement the
+                `__len__` method.
+
+                <Tip>
+
+                If you pass a dictionary with names of datasets as keys and datasets as values, evaluate will run
+                separate evaluations on each dataset. This can be useful to monitor how training affects other
+                datasets or simply to get a more fine-grained evaluation.
+                When used with `load_best_model_at_end`, make sure `metric_for_best_model` references exactly one
+                of the datasets. If you, for example, pass in `{"data1": data1, "data2": data2}` for two datasets
+                `data1` and `data2`, you could specify `metric_for_best_model="eval_data1_loss"` for using the
+                loss on `data1` and `metric_for_best_model="eval_data1_loss"` for the loss on `data2`.
+
+                </Tip>
+
             ignore_keys (`List[str]`, *optional*):
                 A list of keys in the output of your model (if it is a dictionary) that should be ignored when
                 gathering predictions.
@@ -621,23 +651,88 @@ class MyTrainer(Trainer):
             A dictionary containing the evaluation loss and the potential metrics computed from the predictions. The
             dictionary also contains the epoch number which comes from the training state.
         """
+        # handle multipe eval datasets
+        eval_dataset = eval_dataset if eval_dataset is not None else self.eval_dataset
+        if isinstance(eval_dataset, dict):
+            metrics = {}
+            for eval_dataset_name, _eval_dataset in eval_dataset.items():
+                dataset_metrics = self.evaluate(
+                    eval_dataset=_eval_dataset,
+                    ignore_keys=ignore_keys,
+                    metric_key_prefix=f"{metric_key_prefix}_{eval_dataset_name}",
+                )
+                metrics.update(dataset_metrics)
+            return metrics
 
-        self.model.eval()
-        generated_smiles = generate_smiles(
-            self.model,
-            self.tokenizer,
-            self.evaluation_args.n_samples,
-            self.evaluation_args.prompt,
-            self.evaluation_args.temperature,
-            self.evaluation_args.top_k,
-            self.evaluation_args.top_p,
-            self.evaluation_args.batch_size,
-            device=torch.device('cuda')
+        # memory metrics - must set up as early as possible
+        self._memory_tracker.start()
+
+        eval_dataloader = self.get_eval_dataloader(eval_dataset)
+        start_time = time.time()
+
+        eval_loop = self.prediction_loop if self.args.use_legacy_prediction_loop else self.evaluation_loop
+        output = eval_loop(
+            eval_dataloader,
+            description="Evaluation",
+            # No point gathering the predictions if there are no metrics, otherwise we defer to
+            # self.args.prediction_loss_only
+            prediction_loss_only=True if self.compute_metrics is None else None,
+            ignore_keys=ignore_keys,
+            metric_key_prefix=metric_key_prefix,
         )
-        metrics = get_all_metrics(generated_smiles, n_jobs=self.evaluation_args.preprocess_num_jobs, report=["valid"])
-        metrics_ = {}
-        for k in metrics.keys():
-            metrics_[f"eval_{k}"] = metrics[k]
-        self.log(metrics_)
 
-        return metrics
+        total_batch_size = self.args.eval_batch_size * self.args.world_size
+        if f"{metric_key_prefix}_jit_compilation_time" in output.metrics:
+            start_time += output.metrics[f"{metric_key_prefix}_jit_compilation_time"]
+        output.metrics.update(
+            speed_metrics(
+                metric_key_prefix,
+                start_time,
+                num_samples=output.num_samples,
+                num_steps=math.ceil(output.num_samples / total_batch_size),
+            )
+        )
+        #########################################
+        ############# Modified here #############
+        #########################################
+        if self.evaluation_task is not None:
+            output.metrics[f'eval_ds_{self.evaluation_task.task}'] = self.evaluation_task.compute(self.model,
+                                                                                                  self.tokenizer)
+        #########################################
+
+        self.log(output.metrics)
+
+        if DebugOption.TPU_METRICS_DEBUG in self.args.debug:
+            # tpu-comment: Logging debug metrics for PyTorch/XLA (compile, execute times, ops, etc.)
+            xm.master_print(met.metrics_report())
+
+        self.control = self.callback_handler.on_evaluate(self.args, self.state, self.control, output.metrics)
+
+        self._memory_tracker.stop_and_update_metrics(output.metrics)
+
+        return output.metrics
+
+    def _save_spec_checkpoint(self, trial):
+        if self.state.global_step % self.args.save_spec_steps ==0 and self.state.global_step > 0:
+            logger.info(f"save specific checkpoint.")
+            checkpoint_folder = f"spec-{PREFIX_CHECKPOINT_DIR}-{self.state.global_step}"
+
+            run_dir = self._get_output_dir(trial=trial)
+            output_dir = os.path.join(run_dir, checkpoint_folder)
+            if os.path.exists(output_dir) and len(os.listdir(output_dir)) > 0:
+                logger.warning(
+                    f"Checkpoint destination directory {output_dir} already exists and is non-empty."
+                    "Saving will proceed but saved results may be invalid."
+                )
+                staging_output_dir = output_dir
+            else:
+                staging_output_dir = os.path.join(run_dir, f"tmp-{checkpoint_folder}")
+            self.save_model(staging_output_dir)
+
+
+def get_weight_grad_norm(model):
+    weight_norm, grad_norm = 0, 0
+    for i, param in enumerate(model.parameters()):
+        grad_norm += param.grad.data.norm(2).item() ** 2 if param.grad is not None else 0
+        weight_norm += param.data.norm(2).item() ** 2
+    return weight_norm ** 0.5, grad_norm ** 0.5

@@ -35,7 +35,7 @@ pip install 'datasets==2.14.5'
 pip install 'transformers==4.34'
 pip install 'wandb==0.15.12'
 pip install 'matplotlib==3.7.0'
-pip install 'accelerate==0.23.0'
+pip install 'accelerate==0.27.0'
 pip install 'hydra-core==1.3'
 pip install 'gdown==4.7.1'
 pip install wheel setuptools py-cpuinfo
@@ -77,3 +77,27 @@ git lfs install
 git clone https://github.com/molecularsets/moses.git "$Moses_DIR"
 cd "$Moses_DIR"
 python setup.py install
+
+
+#FLASH_ATTN_VERSION='2.3.2'
+#DeepSpeed_VERSION='0.13.3'
+#export MAX_JOBS=4
+#
+#module load gcc/9.3.0
+#module load cuda/11.8
+#module load miniconda/3
+#conda create -n MolGenENV python=3.10
+#conda activate MolGenENV
+#
+#pip install --upgrade pip
+#pip uninstall -y ninja && pip install ninja
+#pip install torch==2.1.2 torchvision==0.16.2 torchaudio==2.1.2 --index-url https://download.pytorch.org/whl/cu118
+#pip install 'datasets==2.17.1'
+#pip install 'transformers==4.38.1'
+#pip install 'wandb==0.16.3'
+#pip install 'accelerate==0.27.0'
+#pip install 'matplotlib==3.8.3'
+#pip install 'hydra-core==1.3.2'
+#pip install 'molvs==0.1.1'
+#pip install 'selfies==2.1.1'
+#pip install 'tabulate==0.9.0'

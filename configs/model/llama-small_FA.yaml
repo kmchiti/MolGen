@@ -1,0 +1,8 @@
+model_name_or_path: 'llama_flash_attention'
+max_seq_length: 64
+vocab_size: 30002
+hidden_size: 640
+num_hidden_layers: 24
+num_attention_heads: 10
+intermediate_size: 2560
+_flash_attn_2_enabled: True

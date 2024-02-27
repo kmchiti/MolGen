@@ -180,3 +180,10 @@ class WandbCallback(TrainerCallback):
         """
         pass
 
+    def on_step_end(self, args, state, control, **kwargs):
+        """
+        Event called at the end of a training step. If using gradient accumulation, one training step might take
+        several inputs.
+        """
+        pass
+
