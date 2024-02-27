@@ -5,7 +5,8 @@
 #SBATCH --partition=main    # ask for unkillable job
 #SBATCH --gpus-per-task=2               # number of gpus per node
 #SBATCH --cpus-per-task=8              # number of cpus per gpu
-#SBATCH --mem-per-gpu=32G               # memory per gpu
+#SBATCH --mem-per-gpu=16G               # memory per gpu
+#SBATCH --ntasks=1
 #SBATCH --constraint=80gb               # constraints
 
 module load libffi
