@@ -38,12 +38,24 @@ def entrypoint(cfg: DictConfig):
     elif cfg.model.model_name_or_path in ['llama', 'llama_flash_attention']:
         model_cfg = LlamaConfig(**cfg.model)
         model = LlamaForCausalLM(model_cfg)
+    elif cfg.model.model_name_or_path == 'llama_flash_attention2':
+        from flash_attn.models.gpt import GPTLMHeadModel
+        from flash_attn.models.llama import llama_config_to_gpt2_config
+        model_cfg = LlamaConfig(**cfg.model)
+        config = llama_config_to_gpt2_config(model_cfg)
+        config.use_flash_attn = True
+        config.fused_bias_fc = True
+        config.fused_mlp = False
+        config.fused_dropout_add_ln = True
+        config.residual_in_fp32 = True
+        # config.pad_vocab_size_multiple=8
+        model = GPTLMHeadModel(config)
     else:
         model = GPT2MolGen(**cfg.model)
 
     # Initialize trainer
     train_args = MyTrainingArguments(data_seed=cfg.seed, seed=cfg.seed, output_dir=output_dir,
-                                     logging_dir=output_dir, **cfg.trainer)
+                                     **cfg.trainer)
     # enable TF32
     if torch.cuda.is_available() and cfg.trainer.tf32:
         torch.backends.cuda.matmul.allow_tf32 = True
