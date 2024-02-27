@@ -2,7 +2,7 @@
 defaults:
   - _self_
   - dataset: chem_smiles_FA
-  - model: llama-small-FA
+  - model: llama-small_FA
   - trainer: hf_trainer_FA
   - eval: basic
 
