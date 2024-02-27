@@ -1,5 +1,7 @@
+data_root: "./data/processed/training/"
 tokenizer_path: "tokenizers/BPE_pubchem_500.json"
 dataset_path: "MolGen/MOSES"
+file_type: "parquet"
 overwrite_cache: false
 max_seq_length: 64
 batch_size: 1024
