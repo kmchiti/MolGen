@@ -69,14 +69,13 @@ class MolGenDataModule(object):
 
     def setup(self):
 
-        if not self._dataset_available():
-            warnings.warn('dataset is not available! download the dataset')
-            self.download_dataset()
-
         # Load dataset
         if self.dataset_path.startswith('MolGen'):
             dataset = load_dataset(self.dataset_path, num_proc=self.dataloader_num_workers )
         else:
+            if not self._dataset_available():
+                warnings.warn('dataset is not available! download the dataset')
+                self.download_dataset()
             dataset = load_dataset(
                 self.file_type,
                 data_files=self.dataset_path,
