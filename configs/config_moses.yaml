@@ -3,7 +3,7 @@ defaults:
   - _self_
   - dataset: moses
   - model: llama-small_flash_attention
-  - trainer: hf_trainer_FA
+  - trainer: hf_trainer_moses
   - eval: basic
 
 seed: 42

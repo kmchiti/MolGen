@@ -27,7 +27,10 @@ class MolGenDataModule(object):
     ):
         super().__init__()
         self.tokenizer_path = os.path.join(data_root, tokenizer_path)
-        self.dataset_path = os.path.join(data_root, dataset_path)
+        if dataset_path.startswith('MolGen'):
+            self.dataset_path = dataset_path
+        else:
+            self.dataset_path = os.path.join(data_root, dataset_path)
         self.file_type = file_type
         self.overwrite_cache = overwrite_cache
         self.max_seq_length = max_seq_length

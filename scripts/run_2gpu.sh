@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=gpt2
-#SBATCH --time=0-12:00
+#SBATCH --time=0-3:00
 
 #SBATCH --partition=main    # ask for unkillable job
 #SBATCH --gpus-per-task=2               # number of gpus per node
