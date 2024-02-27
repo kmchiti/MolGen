@@ -12,15 +12,15 @@ from transformers import (
 class MolGenDataModule(object):
     def __init__(
         self,
-        data_root: str,
-        tokenizer_path: str,
-        dataset_path: str,
-        file_type: str,
-        overwrite_cache: bool,
-        max_seq_length: int,
-        batch_size: int,
-        dataloader_num_workers: int,
-        preprocess_num_workers: int,
+        data_root: str = None,
+        tokenizer_path: str = None,
+        dataset_path: str = None,
+        file_type: str = None,
+        overwrite_cache: bool = None,
+        max_seq_length: int = 64,
+        batch_size: int = 1024,
+        dataloader_num_workers: int = 4,
+        preprocess_num_workers: int = 32,
         folder_url: Optional[str] = None,
         validation_size: Optional[float] = 0.1,
         val_split_seed: Optional[int] = 42,
@@ -74,14 +74,17 @@ class MolGenDataModule(object):
             self.download_dataset()
 
         # Load dataset
-        dataset = load_dataset(
-            self.file_type,
-            data_files=self.dataset_path,
-            features=Features(
-                {"CID": Value(dtype="string"), "SMILES": Value(dtype="string")}
-            ),
-        )
-        dataset = dataset["train"].train_test_split(test_size=self.validation_size, seed=self.val_split_seed)  # type: ignore
+        if self.dataset_path.startswith('MolGen'):
+            dataset = load_dataset(self.dataset_path, num_proc=self.dataloader_num_workers )
+        else:
+            dataset = load_dataset(
+                self.file_type,
+                data_files=self.dataset_path,
+                features=Features(
+                    {"CID": Value(dtype="string"), "SMILES": Value(dtype="string")}
+                ),
+            )
+            dataset = dataset["train"].train_test_split(test_size=self.validation_size, seed=self.val_split_seed)  # type: ignore
 
         def tokenize_function(
             element: dict,
