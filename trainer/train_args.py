@@ -1,11 +1,12 @@
 from transformers import TrainingArguments
+from omegaconf import DictConfig, OmegaConf
 
 class MyTrainingArguments(TrainingArguments):
     def __init__(self, output_dir='./save', data_seed=42, seed=42,
                  run_name='test', report_to=None, save_spec_steps=None,  **kwargs):
         if 'deepspeed' in kwargs.keys():
             deepspeed = kwargs.pop('deepspeed')
-            deepspeed = deepspeed.as_dict()
+            deepspeed = OmegaConf.to_container(deepspeed)
         else:
             deepspeed = None
         super().__init__(output_dir=output_dir, data_seed=data_seed, seed=seed,
