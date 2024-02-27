@@ -4,7 +4,7 @@ from transformers import set_seed, Trainer, TrainingArguments
 from trainer import MyHFTrainer, MyTrainingArguments
 from callbacks import WandbCallback
 from dataset import MolGenDataModule
-from models import GPT2MolGen, GPT2MolGen_flash_atten
+from models import GPT2MolGen, GPT2MolGen_flash_atten, Llama_small_flash_atten
 from utils import creat_unique_experiment_name, is_world_process_zero, save_HF_model
 import torch
 from transformers import LlamaForCausalLM, LlamaConfig
@@ -39,17 +39,7 @@ def entrypoint(cfg: DictConfig):
         model_cfg = LlamaConfig(**cfg.model)
         model = LlamaForCausalLM(model_cfg)
     elif cfg.model.model_name_or_path == 'llama_flash_attention2':
-        from flash_attn.models.gpt import GPTLMHeadModel
-        from flash_attn.models.llama import llama_config_to_gpt2_config
-        model_cfg = LlamaConfig(**cfg.model)
-        config = llama_config_to_gpt2_config(model_cfg)
-        config.use_flash_attn = True
-        config.fused_bias_fc = True
-        config.fused_mlp = False
-        config.fused_dropout_add_ln = True
-        config.residual_in_fp32 = True
-        # config.pad_vocab_size_multiple=8
-        model = GPTLMHeadModel(config)
+        model = Llama_small_flash_atten(**cfg.model)
     else:
         model = GPT2MolGen(**cfg.model)
 
