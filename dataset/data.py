@@ -120,6 +120,7 @@ class MolGenDataModule(object):
                 truncation=True,
                 max_length=max_length,
                 padding="max_length",
+                add_special_tokens=True,
             )
             return {"input_ids": outputs["input_ids"]}
 
