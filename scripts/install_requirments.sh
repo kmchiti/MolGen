@@ -6,6 +6,7 @@
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=20G
 #SBATCH --time=3:00:00
+#SBATCH --exclude=cn-k[001-002]
 set -e
 set -v
 

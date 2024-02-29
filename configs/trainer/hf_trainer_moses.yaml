@@ -7,7 +7,7 @@ dataloader_pin_memory: true
 do_eval: false
 do_train: true
 evaluation_strategy: "steps"
-eval_steps: 1000
+eval_steps: 500
 gradient_accumulation_steps: 1
 gradient_checkpointing: false
 learning_rate: 4e-4
@@ -25,4 +25,4 @@ save_total_limit: 5
 torch_compile: false
 warmup_steps: 100
 weight_decay: 0.01
-save_spec_steps: 10000
+save_spec_steps: 1000

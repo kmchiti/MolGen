@@ -8,6 +8,7 @@
 #SBATCH --mem-per-gpu=16G               # memory per gpu
 #SBATCH --ntasks=1
 #SBATCH --constraint=80gb               # constraints
+#SBATCH --exclude=cn-k[001-002]
 
 module load libffi
 source ~/anaconda3/bin/activate

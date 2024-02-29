@@ -9,6 +9,7 @@
 #SBATCH --mem-per-gpu=32G               # memory per gpu
 #SBATCH --ntasks-per-node=1             # crucial - only 1 task per node!
 #SBATCH --constraint=80gb               # constraints
+#SBATCH --exclude=cn-k[001-002]
 
 module load libffi
 source ~/anaconda3/bin/activate

@@ -49,11 +49,13 @@ def creat_unique_experiment_name(config: DictConfig) -> str:
     if 'eval' in _config.keys():
         _config.pop('eval', None)
     model_arch = _config['model']['model_name_or_path']
+    data = _config['dataset']['dataset_path'].replace("*", "")
+    data = data.replace("/", "_")
     _config = unroll_configs(_config)
     # Convert the unrolled dictionary to a JSON string and hash it
     unrolled_json = json.dumps(_config, sort_keys=True)
     hash_name = hashlib.md5(unrolled_json.encode()).hexdigest()[:8]
-    exp_name = f"{model_arch}_{hash_name}"
+    exp_name = f"{model_arch}_{data}_{hash_name}"
     return exp_name
 
 # code from: https://github.com/huggingface/transformers/blob/bd50402b56980ff17e957342ef69bd9b0dd45a7b/src/transformers/trainer.py#L2758

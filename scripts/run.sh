@@ -6,6 +6,7 @@
 #SBATCH --gres=gpu:a100l:1
 #SBATCH --cpus-per-task=4              # number of cpus per gpu
 #SBATCH --mem-per-gpu=32G               # memory per gpu
+#SBATCH --exclude=cn-k[001-002]
 
 module load libffi
 source ~/anaconda3/bin/activate

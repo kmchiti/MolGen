@@ -7,7 +7,7 @@ from transformers import (
     DataCollatorForLanguageModeling,
     PreTrainedTokenizerFast,
 )
-
+from tokenizers.processors import TemplateProcessing
 
 class MolGenDataModule(object):
     def __init__(
@@ -49,6 +49,16 @@ class MolGenDataModule(object):
         tokenizer.eos_token = "<eos>"
         tokenizer.bos_token = "<bos>"
         tokenizer.pad_token = tokenizer.eos_token
+
+        # Add special tokens to the post processor
+        tokenizer._tokenizer.post_processor = TemplateProcessing(
+            single="<bos> $A <eos>",
+            special_tokens=[
+                ("<bos>", tokenizer.bos_token_id),
+                ("<eos>", tokenizer.eos_token_id),
+            ],
+        )
+
         self.tokenizer = tokenizer
 
     def _dataset_available(self):
@@ -74,7 +84,7 @@ class MolGenDataModule(object):
 
         # Load dataset
         if self.dataset_path.startswith('MolGen'):
-            dataset = load_dataset(self.dataset_path, num_proc=self.dataloader_num_workers )
+            dataset = load_dataset(self.dataset_path, num_proc=self.dataloader_num_workers)
         else:
             if not self._dataset_available():
                 warnings.warn('dataset is not available! download the dataset')
