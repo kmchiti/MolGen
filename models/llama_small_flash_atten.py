@@ -1,3 +1,4 @@
+import os.path
 from abc import ABC
 from transformers import GPT2Config
 from typing import Optional
@@ -6,7 +7,7 @@ from transformers.modeling_outputs import CausalLMOutputWithCrossAttentions
 import torch
 from torch.nn import CrossEntropyLoss
 from transformers import LlamaForCausalLM, LlamaConfig
-from flash_attn.models.llama import llama_config_to_gpt2_config
+from flash_attn.models.llama import llama_config_to_gpt2_config, inv_remap_state_dict_hf_llama
 
 try:
     from flash_attn.models.gpt import GPTLMHeadModel
@@ -117,3 +118,18 @@ class Llama_small_flash_atten(GPTLMHeadModel, ABC):
             loss=loss,
             logits=lm_logits,
         )
+
+    def save_HF_model(self, config, output_dir: str, additional_name: str = None, version: float = 1.0):
+        state_dict = self.state_dict()
+        state_dict = {key: value.cpu() for key, value in state_dict.items()}
+        state_dict = inv_remap_state_dict_hf_llama(state_dict, self.config)
+
+        model_cfg = LlamaConfig(config)
+        model = LlamaForCausalLM(model_cfg)
+        model.load_state_dict(state_dict)
+        model.save_pretrained(output_dir)
+        if additional_name is None:
+            upload_name = f'MolGen/Llama-small-{version}'
+        else:
+            upload_name = f'MolGen/Llama-small-{additional_name}-{version}'
+        model.push_to_hub(upload_name)

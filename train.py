@@ -8,7 +8,7 @@ from models import GPT2MolGen, GPT2MolGen_flash_atten, Llama_small_flash_atten
 from utils import creat_unique_experiment_name, is_world_process_zero, save_HF_model
 import torch
 from transformers import LlamaForCausalLM, LlamaConfig
-
+from flash_attn.models.gpt import GPTLMHeadModel
 import os
 
 
@@ -73,9 +73,10 @@ def entrypoint(cfg: DictConfig):
     else:
         train_result = trainer.train()
     trainer.save_model()  # Saves the tokenizer too for easy upload
-    if is_world_process_zero(train_args):
+    if is_world_process_zero(train_args)and isinstance(model, GPTLMHeadModel):
         print('save remapped HF model to:', os.path.join(output_dir, 'HF'))
-        save_HF_model(model, model.config, os.path.join(output_dir, 'HF'))
+        model.save_HF_model(**cfg.model, output_dir=os.path.join(output_dir, 'HF'),
+                            additional_name=cfg.dataset['dataset_name'])
         datamodule.tokenizer.save_pretrained(os.path.join(output_dir, 'HF'))
 
 
