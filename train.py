@@ -75,7 +75,7 @@ def entrypoint(cfg: DictConfig):
     trainer.save_model()  # Saves the tokenizer too for easy upload
     if is_world_process_zero(train_args)and isinstance(model, GPTLMHeadModel):
         print('save remapped HF model to:', os.path.join(output_dir, 'HF'))
-        model.save_HF_model(**cfg.model, output_dir=os.path.join(output_dir, 'HF'),
+        model.save_HF_model(OmegaConf.to_container(cfg.model), output_dir=os.path.join(output_dir, 'HF'),
                             additional_name=cfg.dataset['dataset_name'])
         datamodule.tokenizer.save_pretrained(os.path.join(output_dir, 'HF'))
 
