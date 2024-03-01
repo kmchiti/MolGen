@@ -46,7 +46,7 @@ Most frequent tokens:
 [130] --> CC(C)
 But in this code [69] --> CC was prefered.
 """
-def generate_smiles(
+def generate_smiles_FA(
     model: GPT2LMHeadModel,
     tokenizer: PreTrainedTokenizerFast,
     n_samples: int,
@@ -54,13 +54,12 @@ def generate_smiles(
     temperature: float,
     top_k: int,
     top_p: float,
-    batch_size: int,
     device: torch.device,
 ) -> List[str]:
     """Generate SMILES from model.
+    This generation only works for batch = 1
 
     :param device:
-    :param batch_size:
     :param model: GPT2 model
     :param tokenizer: GPT2 tokenizer
     :param n_samples: Number of samples to generate
@@ -70,24 +69,66 @@ def generate_smiles(
     :param top_p: Top p for sampling
     :return: List of SMILES
     """
-    prompt = [prompt for _ in range(batch_size)]
     inputs = tokenizer(prompt, return_tensors="pt").to(device)
-    input_ids = inputs["input_ids"]
-    outputs = None
-    for i in tqdm(range(n_samples // batch_size)):
-        output = model.generate(
-            input_ids=input_ids,
-            max_length=64,
-            temperature=temperature,
-            top_k=top_k,
-            top_p=top_p,
-        )
-        if outputs is None:
-            outputs = output
-        else:
-            outputs = torch.cat((outputs, output), dim=0)
-    return [tokenizer.decode(i, skip_special_tokens=True).replace(" ", "") for i in outputs]
+    input_ids = inputs["input_ids"][0][:-1].reshape(1, -1)
+    outputs = []
+    for i in tqdm(range(n_samples)):
+        output = model.generate(input_ids=input_ids, max_length=64, temperature=temperature,
+                                top_k=top_k, top_p=top_p,
+                                eos_token_id=tokenizer.eos_token_id)
+        output = tokenizer.batch_decode(output, skip_special_tokens=True)[0].replace(" ", "")
+        outputs.append(output)
+    return outputs
 
+
+def generate_smiles_HF(
+    model,
+    tokenizer,
+    n_samples: int = 30000,
+    num_return_sequences: int = 32,
+    no_repeat_ngram_size: int = 2,
+    prompt: str = 'CC',
+    temperature: float = 1.0,
+    top_k: int = 50,
+    top_p: float = 0.95,
+    device: torch.device = torch.device('cuda'),
+):
+    """Generate SMILES from model.
+
+        :param num_return_sequences:
+        :param device:
+        :param no_repeat_ngram_size:
+        :param model: GPT2 model
+        :param tokenizer: GPT2 tokenizer
+        :param n_samples: Number of samples to generate
+        :param prompt: Prompt to start generation
+        :param temperature: Temperature for sampling
+        :param top_k: Top K for sampling
+        :param top_p: Top p for sampling
+        :return: List of SMILES
+        """
+    input_ids = tokenizer.encode(prompt, return_tensors="pt").to(device)
+    # skip eos token
+    input_ids = input_ids[:, :-1]
+    generated_sequences = []
+    for i in tqdm(range(n_samples//num_return_sequences)):
+        output = model.generate(
+                                input_ids,
+                                max_length=64,
+                                num_return_sequences=num_return_sequences,
+                                no_repeat_ngram_size=no_repeat_ngram_size,
+                                top_k=top_k,
+                                top_p=top_p,
+                                temperature=temperature,
+                                do_sample=True,
+                                pad_token_id=tokenizer.pad_token_id,
+                                eos_token_id=tokenizer.eos_token_id,
+                                return_dict_in_generate=True,
+                            )
+        output = tokenizer.batch_decode(output.sequences, skip_special_tokens=True)
+        generated_sequences += [s.replace(" ", "") for s in output]
+
+    return generated_sequences
 
 def get_all_metrics(
     gen,
@@ -238,7 +279,7 @@ def entrypoint(cfg: DictConfig):
                    tags=cfg.wandb.tags, mode=cfg.wandb.mode)
 
     # Generate SMILES and calculate metrics
-    generated_smiles = generate_smiles(
+    generated_smiles = generate_smiles_HF(
         model,
         datamodule.tokenizer,
         cfg.eval.n_samples,
