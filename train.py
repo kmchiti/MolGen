@@ -77,7 +77,8 @@ def entrypoint(cfg: DictConfig):
         print('save remapped HF model to:', os.path.join(output_dir, 'HF'))
         model.save_HF_model(OmegaConf.to_container(cfg.model), datamodule.tokenizer,
                             output_dir=os.path.join(output_dir, 'HF'),
-                            dataset_name=cfg.dataset['dataset_name'])
+                            dataset_name=cfg.dataset['dataset_name'],
+                            token=cfg.write_token)
 
 
 if __name__ == "__main__":

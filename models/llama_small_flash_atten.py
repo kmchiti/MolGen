@@ -119,7 +119,7 @@ class Llama_small_flash_atten(GPTLMHeadModel, ABC):
             logits=lm_logits,
         )
 
-    def save_HF_model(self, config, tokenizer, output_dir: str, dataset_name: str = None):
+    def save_HF_model(self, config, tokenizer, output_dir: str, dataset_name: str = None, token=None):
         state_dict = self.state_dict()
         state_dict = {key: value.cpu() for key, value in state_dict.items()}
         state_dict = inv_remap_state_dict_hf_llama(state_dict, self.config)
@@ -131,5 +131,5 @@ class Llama_small_flash_atten(GPTLMHeadModel, ABC):
         tokenizer.save_pretrained(output_dir)
 
         upload_name = f'MolGen/Llama-small-{dataset_name}'
-        model.push_to_hub(upload_name)
-        tokenizer.push_to_hub(upload_name)
+        model.push_to_hub(upload_name, token=token)
+        tokenizer.push_to_hub(upload_name, token=token)
