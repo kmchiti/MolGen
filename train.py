@@ -35,10 +35,10 @@ def entrypoint(cfg: DictConfig):
     # Initialize model
     if cfg.model.model_name_or_path == 'gpt2_flash_atten':
         model = GPT2MolGen_flash_atten(**cfg.model)
-    elif cfg.model.model_name_or_path in ['llama', 'llama_flash_attention']:
+    elif cfg.model.model_name_or_path in ['llama_small', 'llama_small_HF']:
         model_cfg = LlamaConfig(**cfg.model)
         model = LlamaForCausalLM(model_cfg)
-    elif cfg.model.model_name_or_path == 'llama_flash_attention2':
+    elif cfg.model.model_name_or_path == 'llama_small_FA':
         model = Llama_small_flash_atten(**cfg.model)
     else:
         model = GPT2MolGen(**cfg.model)

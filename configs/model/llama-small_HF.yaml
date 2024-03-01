@@ -1,4 +1,4 @@
-model_name_or_path: 'llama_flash_attention'
+model_name_or_path: 'llama_small_HF'
 n_ctx: 64
 vocab_size: 30003
 hidden_size: 640
