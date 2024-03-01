@@ -1,6 +1,6 @@
 model_name_or_path: 'llama_flash_attention'
 n_ctx: 64
-vocab_size: 30002
+vocab_size: 30003
 hidden_size: 640
 num_hidden_layers: 24
 num_attention_heads: 10

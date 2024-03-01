@@ -48,7 +48,7 @@ class MolGenDataModule(object):
         tokenizer.add_special_tokens({"additional_special_tokens": ["<bos>", "<eos>", "[PAD]"]})  # type: ignore
         tokenizer.eos_token = "<eos>"
         tokenizer.bos_token = "<bos>"
-        tokenizer.pad_token = tokenizer.eos_token
+        tokenizer.pad_token = "[PAD]"
 
         # Add special tokens to the post processor
         tokenizer._tokenizer.post_processor = TemplateProcessing(

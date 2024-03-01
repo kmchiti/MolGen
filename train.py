@@ -20,7 +20,7 @@ def _checkpoint_is_available(trainer):
     return checkpoint_found
 
 
-@hydra.main(version_base=None, config_path="configs", config_name="config_FA")
+@hydra.main(version_base=None, config_path="configs", config_name="config_PubChem")
 def entrypoint(cfg: DictConfig):
     # Initialize setup
     set_seed(cfg.seed)
