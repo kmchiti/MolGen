@@ -6,6 +6,7 @@ from torch.utils.data.dataloader import DataLoader
 from transformers import (
     DataCollatorForLanguageModeling,
     PreTrainedTokenizerFast,
+    AutoTokenizer,
 )
 from tokenizers.processors import TemplateProcessing
 
@@ -13,40 +14,37 @@ class MolGenDataModule(object):
     def __init__(
         self,
         dataset_name: str = None,
-        data_root: str = None,
         tokenizer_path: str = None,
-        dataset_path: str = None,
-        file_type: str = None,
+        tokenizer_name: str = None,
+        column: str = "SMILES",
         overwrite_cache: bool = None,
         max_seq_length: int = 64,
-        batch_size: int = 1024,
         dataloader_num_workers: int = 4,
-        preprocess_num_workers: int = 32,
-        folder_url: Optional[str] = None,
+        preprocess_num_workers: int = 34,
         validation_size: Optional[float] = 0.1,
         val_split_seed: Optional[int] = 42,
     ):
         super().__init__()
         self.dataset_name = dataset_name
-        self.tokenizer_path = os.path.join(data_root, tokenizer_path)
-        if dataset_path.startswith('MolGen'):
-            self.dataset_path = dataset_path
-        else:
-            self.dataset_path = os.path.join(data_root, dataset_path)
-        self.file_type = file_type
         self.overwrite_cache = overwrite_cache
         self.max_seq_length = max_seq_length
-        self.batch_size = batch_size
         self.dataloader_num_workers = dataloader_num_workers
         self.preprocess_num_workers = preprocess_num_workers
         self.validation_size = validation_size
         self.val_split_seed = val_split_seed
-        self.folder_url = folder_url
+        self.column = column
+
         self.data_collator = None
         self.eval_dataset = None
         self.train_dataset = None
+
         # Load tokenizer
-        tokenizer = PreTrainedTokenizerFast(tokenizer_file=self.tokenizer_path)
+        if tokenizer_name is not None:
+            tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
+        elif tokenizer_path is not None:
+            tokenizer = PreTrainedTokenizerFast(tokenizer_file=tokenizer_path)
+        else:
+            raise "tokenizer not found"
         tokenizer.add_special_tokens({"additional_special_tokens": ["<bos>", "<eos>", "[PAD]"]})  # type: ignore
         tokenizer.eos_token = "<eos>"
         tokenizer.bos_token = "<bos>"
@@ -63,42 +61,12 @@ class MolGenDataModule(object):
 
         self.tokenizer = tokenizer
 
-    def _dataset_available(self):
-        return os.path.exists(self.tokenizer_path) and os.path.exists(self.dataset_path[:-1])
-
-    def download_dataset(self):
-        import gdown
-
-        folder_id = self.folder_url.split('/')[-1]
-        gdown.cached_download(f"https://drive.google.com/uc?id={folder_id}", f"{folder_id}.json")
-
-        # Extract file IDs from the metadata
-        with open(f"{folder_id}.json", 'r') as f:
-            metadata = f.read()
-
-        file_ids = [line.split('"')[3] for line in metadata.split('\n') if '"id"' in line]
-
-        # Download each file in the folder
-        for file_id in file_ids:
-            gdown.download(f"https://drive.google.com/uc?id={file_id}", output=f"{file_id}.txt")
-
     def setup(self):
 
         # Load dataset
-        if self.dataset_path.startswith('MolGen'):
-            dataset = load_dataset(self.dataset_path, num_proc=self.dataloader_num_workers)
-        else:
-            if not self._dataset_available():
-                warnings.warn('dataset is not available! download the dataset')
-                self.download_dataset()
-            dataset = load_dataset(
-                self.file_type,
-                data_files=self.dataset_path,
-                features=Features(
-                    {"CID": Value(dtype="string"), "SMILES": Value(dtype="string")}
-                ),
-            )
-            dataset = dataset["train"].train_test_split(test_size=self.validation_size, seed=self.val_split_seed)  # type: ignore
+        dataset = load_dataset(self.dataset_name, num_proc=self.dataloader_num_workers)
+        if 'test' not in dataset.keys():
+            dataset = dataset["train"].train_test_split(test_size=self.validation_size, seed=self.val_split_seed)
 
         def tokenize_function(
             element: dict,
@@ -135,36 +103,31 @@ class MolGenDataModule(object):
             load_from_cache_file=not self.overwrite_cache,
             fn_kwargs={
                 "max_length": self.max_seq_length,
-                "column": "SMILES",
+                "column": self.column,
                 "tokenizer": self.tokenizer,
             },
         )
 
-        # Create data collator
-        data_collator = DataCollatorForLanguageModeling(
+        # Create train and validation datasets
+        self.train_dataset = tokenized_dataset["train"]
+        self.eval_dataset = tokenized_dataset["test"]
+        self.data_collator = DataCollatorForLanguageModeling(
             tokenizer=self.tokenizer, mlm=False
         )
 
-        # Create train and validation datasets
-        train_dataset = tokenized_dataset["train"]
-        eval_dataset = tokenized_dataset["test"]
-        self.train_dataset = train_dataset
-        self.eval_dataset = eval_dataset
-        self.data_collator = data_collator
-
-    def train_dataloader(self):
+    def train_dataloader(self, batch_size: int = 1024,):
         return DataLoader(
-            self.train_dataset,  # type: ignore
-            batch_size=self.batch_size,
+            self.train_dataset,
+            batch_size=batch_size,
             collate_fn=self.data_collator,
             num_workers=self.dataloader_num_workers,
             shuffle=True,
         )
 
-    def val_dataloader(self):
+    def val_dataloader(self, batch_size: int = 1024,):
         return DataLoader(
-            self.eval_dataset,  # type: ignore
-            batch_size=self.batch_size,
+            self.eval_dataset,
+            batch_size=batch_size,
             collate_fn=self.data_collator,
             num_workers=self.dataloader_num_workers,
         )

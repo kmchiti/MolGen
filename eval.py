@@ -2,7 +2,7 @@ import hydra
 from omegaconf import DictConfig, OmegaConf
 from transformers import set_seed, Trainer, TrainingArguments
 from dataset import MolGenDataModule
-from models import GPT2MolGen, GPT2MolGen_flash_atten
+from models import GPT2MolGen, GPT2MolGen_flash_atten, Llama_small_flash_atten
 from utils import creat_unique_experiment_name, is_world_process_zero, save_HF_model
 import wandb
 import torch
@@ -10,6 +10,8 @@ import os
 import argparse
 from multiprocessing import Pool
 from typing import List, Tuple
+from trainer import MyHFTrainer, MyTrainingArguments
+from callbacks import WandbCallback
 
 import pandas as pd
 from moses.dataset import get_dataset, get_statistics
@@ -29,8 +31,9 @@ from moses.metrics.metrics import (
 from moses.metrics.utils import QED, SA, get_mol, logP, weight
 from moses.utils import disable_rdkit_log, enable_rdkit_log, mapper
 from tabulate import tabulate
-from transformers import GPT2LMHeadModel, PreTrainedTokenizerFast
+from transformers import GPT2LMHeadModel, PreTrainedTokenizerFast, LlamaForCausalLM, LlamaConfig
 from tqdm import tqdm
+
 
 def _checkpoint_is_available(trainer):
     items = os.listdir(trainer.args.output_dir)
@@ -39,6 +42,7 @@ def _checkpoint_is_available(trainer):
         in items)
     return checkpoint_found
 
+
 """
 Most frequent tokens:
 [295] --> O=C(O)
@@ -46,15 +50,17 @@ Most frequent tokens:
 [130] --> CC(C)
 But in this code [69] --> CC was prefered.
 """
+
+
 def generate_smiles_FA(
-    model: GPT2LMHeadModel,
-    tokenizer: PreTrainedTokenizerFast,
-    n_samples: int,
-    prompt: str,
-    temperature: float,
-    top_k: int,
-    top_p: float,
-    device: torch.device,
+        model: GPT2LMHeadModel,
+        tokenizer: PreTrainedTokenizerFast,
+        n_samples: int,
+        prompt: str,
+        temperature: float,
+        top_k: int,
+        top_p: float,
+        device: torch.device,
 ) -> List[str]:
     """Generate SMILES from model.
     This generation only works for batch = 1
@@ -82,16 +88,16 @@ def generate_smiles_FA(
 
 
 def generate_smiles_HF(
-    model,
-    tokenizer,
-    n_samples: int = 30000,
-    num_return_sequences: int = 32,
-    no_repeat_ngram_size: int = 2,
-    prompt: str = 'CC',
-    temperature: float = 1.0,
-    top_k: int = 50,
-    top_p: float = 0.95,
-    device: torch.device = torch.device('cuda'),
+        model,
+        tokenizer,
+        n_samples: int = 30000,
+        num_return_sequences: int = 32,
+        no_repeat_ngram_size: int = 2,
+        prompt: str = 'CC',
+        temperature: float = 1.0,
+        top_k: int = 50,
+        top_p: float = 0.95,
+        device: torch.device = torch.device('cuda'),
 ):
     """Generate SMILES from model.
 
@@ -111,38 +117,39 @@ def generate_smiles_HF(
     # skip eos token
     input_ids = input_ids[:, :-1]
     generated_sequences = []
-    for i in tqdm(range(n_samples//num_return_sequences)):
+    for i in tqdm(range(n_samples // num_return_sequences)):
         output = model.generate(
-                                input_ids,
-                                max_length=64,
-                                num_return_sequences=num_return_sequences,
-                                no_repeat_ngram_size=no_repeat_ngram_size,
-                                top_k=top_k,
-                                top_p=top_p,
-                                temperature=temperature,
-                                do_sample=True,
-                                pad_token_id=tokenizer.pad_token_id,
-                                eos_token_id=tokenizer.eos_token_id,
-                                return_dict_in_generate=True,
-                            )
+            input_ids,
+            max_length=64,
+            num_return_sequences=num_return_sequences,
+            no_repeat_ngram_size=no_repeat_ngram_size,
+            top_k=top_k,
+            top_p=top_p,
+            temperature=temperature,
+            do_sample=True,
+            pad_token_id=tokenizer.pad_token_id,
+            eos_token_id=tokenizer.eos_token_id,
+            return_dict_in_generate=True,
+        )
         output = tokenizer.batch_decode(output.sequences, skip_special_tokens=True)
         generated_sequences += [s.replace(" ", "") for s in output]
 
     return generated_sequences
 
+
 def get_all_metrics(
-    gen,
-    k=None,
-    n_jobs=1,
-    device="cpu",
-    batch_size=512,
-    pool=None,
-    test=None,
-    test_scaffolds=None,
-    ptest=None,
-    ptest_scaffolds=None,
-    train=None,
-    report: List[str] = ['all'],
+        gen,
+        k=None,
+        n_jobs=1,
+        device="cpu",
+        batch_size=512,
+        pool=None,
+        test=None,
+        test_scaffolds=None,
+        ptest=None,
+        ptest_scaffolds=None,
+        train=None,
+        report: List[str] = ['all'],
 ):
     """Computes all available metrics between test (scaffold test) and generated sets of SMILES.
 
@@ -254,7 +261,6 @@ def get_all_metrics(
 
 @hydra.main(version_base=None, config_path="configs", config_name="config_eval")
 def entrypoint(cfg: DictConfig):
-
     # Initialize setup
     set_seed(cfg.seed)
     exp_name = creat_unique_experiment_name(cfg)
@@ -267,16 +273,37 @@ def entrypoint(cfg: DictConfig):
     # Load model
     if cfg.model.model_name_or_path == 'gpt2_flash_atten':
         model = GPT2MolGen_flash_atten(**cfg.model)
+    elif cfg.model.model_name_or_path in ['llama_small', 'llama_small_HF']:
+        model_cfg = LlamaConfig(**cfg.model)
+        model = LlamaForCausalLM(model_cfg)
+    elif cfg.model.model_name_or_path == 'llama_small_FA':
+        model = Llama_small_flash_atten(**cfg.model)
     else:
         model = GPT2MolGen(**cfg.model)
-    checkpoint = torch.load(os.path.join(output_dir, 'pytorch_model.bin'), map_location=torch.device('cpu'))
-    model.load_state_dict(checkpoint)
-    model = model.to(dtype=torch.bfloat16, device='cuda')
+    # checkpoint = torch.load(os.path.join(output_dir, 'pytorch_model.bin'), map_location=torch.device('cpu'))
+    # model.load_state_dict(checkpoint)
+    # model = model.to(dtype=torch.bfloat16, device='cuda')
 
+    # Initialize trainer
     if cfg.wandb_logs:
-        wandb.init(entity=cfg.wandb.entity, project=cfg.wandb.project,
-                   name=exp_name, config=OmegaConf.to_container(cfg),
-                   tags=cfg.wandb.tags, mode=cfg.wandb.mode)
+        wandb_callback = [WandbCallback(model=model, entity=cfg.wandb.entity, project=cfg.wandb.project,
+                                        name=exp_name, config=OmegaConf.to_container(cfg), tags=cfg.wandb.tags)]
+    else:
+        wandb_callback = None
+    train_args = MyTrainingArguments(data_seed=cfg.seed, seed=cfg.seed, output_dir=output_dir, **cfg.trainer)
+
+    trainer = MyHFTrainer(model=model,
+                          args=train_args,
+                          callbacks=wandb_callback,
+                          tokenizer=datamodule.tokenizer,
+                          data_collator=datamodule.data_collator,
+                          train_dataset=datamodule.train_dataset,
+                          eval_dataset=datamodule.eval_dataset,
+                          evaluation_task=None,
+                          )
+    print(f"load checkpoint from: {output_dir}")
+    trainer._load_from_checkpoint(output_dir)
+    model = trainer.accelerator.prepare_model(model, evaluation_mode=True)
 
     # Generate SMILES and calculate metrics
     generated_smiles = generate_smiles_HF(
@@ -291,8 +318,6 @@ def entrypoint(cfg: DictConfig):
         device=torch.device('cuda')
     )
     metrics = get_all_metrics(generated_smiles, n_jobs=cfg.eval.preprocess_num_jobs)
-    if cfg.wandb_logs:
-        wandb.log(metrics)
 
     # Convert the dictionary to a list of lists
     metrics_table = [[k, v] for k, v in metrics.items()]
@@ -301,6 +326,8 @@ def entrypoint(cfg: DictConfig):
     # Convert the list of lists to a DataFrame
     df = pd.DataFrame(metrics_table, columns=["Metric", "Value"])
     df.to_csv(os.path.join(output_dir, 'metrics.csv'), index=False)
+    if cfg.wandb_logs:
+        wandb.log({"evaluation_metrics": wandb.Table(dataframe=df)})
 
     # Save the SMILES to a CSV file
     df = pd.DataFrame(generated_smiles, columns=["SMILES"])

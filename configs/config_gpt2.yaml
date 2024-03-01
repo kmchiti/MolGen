@@ -1,7 +1,7 @@
 # The Defaults List is a list in an input config that instructs Hydra how to build the output config.
 defaults:
   - _self_
-  - dataset: chem_smiles
+  - dataset: pubchem_smiles
   - model: gpt2
   - trainer: hf_trainer
   - eval: basic
