@@ -12,6 +12,7 @@ from tokenizers.processors import TemplateProcessing
 class MolGenDataModule(object):
     def __init__(
         self,
+        dataset_name: str = None,
         data_root: str = None,
         tokenizer_path: str = None,
         dataset_path: str = None,
@@ -26,6 +27,7 @@ class MolGenDataModule(object):
         val_split_seed: Optional[int] = 42,
     ):
         super().__init__()
+        self.dataset_name = dataset_name
         self.tokenizer_path = os.path.join(data_root, tokenizer_path)
         if dataset_path.startswith('MolGen'):
             self.dataset_path = dataset_path
