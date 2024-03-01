@@ -8,6 +8,8 @@ defaults:
 
 seed: 42
 save_path: './save'
+write_HF_token: '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'
+read_HF_token: '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'
 
 hydra:
   run:

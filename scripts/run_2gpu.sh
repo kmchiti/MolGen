@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=gpt2
-#SBATCH --time=0-3:00
+#SBATCH --time=0-24:00
 
 #SBATCH --partition=main    # ask for unkillable job
 #SBATCH --gpus-per-task=2               # number of gpus per node
@@ -15,4 +15,4 @@ source ~/anaconda3/bin/activate
 conda activate my-rdkit-env
 export HF_HOME=$SCRATCH/hf_home
 
-torchrun --nproc_per_node=2 train.py --config-name=config_moses
+torchrun --nproc_per_node=2 train.py --config-name=config_PubChem

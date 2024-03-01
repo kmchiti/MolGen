@@ -1,3 +1,4 @@
+dataset_name: "PubChem"
 data_root: "./data/processed/training/"
 tokenizer_path: "tokenizers/BPE_pubchem_500.json"
 dataset_path: "pubchem/*"
