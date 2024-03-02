@@ -1,13 +1,12 @@
 import hydra
 from omegaconf import DictConfig, OmegaConf
-from transformers import set_seed, Trainer, TrainingArguments
+from transformers import set_seed
 from dataset import MolGenDataModule
 from models import GPT2MolGen, GPT2MolGen_flash_atten, Llama_small_flash_atten
-from utils import creat_unique_experiment_name, is_world_process_zero, save_HF_model
+from utils import creat_unique_experiment_name, is_world_process_zero
 import wandb
 import torch
 import os
-import argparse
 from multiprocessing import Pool
 from typing import List, Tuple
 from trainer import MyHFTrainer, MyTrainingArguments
@@ -33,38 +32,31 @@ from moses.utils import disable_rdkit_log, enable_rdkit_log, mapper
 from tabulate import tabulate
 from transformers import GPT2LMHeadModel, PreTrainedTokenizerFast, LlamaForCausalLM, LlamaConfig
 from tqdm import tqdm
+import copy
 
-
-def _checkpoint_is_available(trainer):
-    items = os.listdir(trainer.args.output_dir)
-    checkpoint_found = any(
-        item.startswith("checkpoint") and os.path.isdir(os.path.join(trainer.args.output_dir, item)) for item
-        in items)
-    return checkpoint_found
-
-
-"""
-Most frequent tokens:
-[295] --> O=C(O)
-[224] --> COC(=O)
-[130] --> CC(C)
-But in this code [69] --> CC was prefered.
-"""
-
+def filter_tokens_after_eos(sequences, eos_id):
+    output = copy.deepcopy(sequences)
+    for i in range(sequences.size(0)):
+        row = sequences[i]
+        eos_position = (row == eos_id).nonzero()
+        if eos_position.numel() > 0:
+            eos_position = eos_position[0, 0].item()  # Get the index of the first occurrence
+            output[i, eos_position+1:] = eos_id
+    return output
 
 def generate_smiles_FA(
-        model: GPT2LMHeadModel,
-        tokenizer: PreTrainedTokenizerFast,
-        n_samples: int,
-        prompt: str,
-        temperature: float,
-        top_k: int,
-        top_p: float,
-        device: torch.device,
-) -> List[str]:
+        model,
+        tokenizer,
+        n_samples: int = 30000,
+        num_return_sequences: int = 1000,
+        prompt: str = "CC",
+        temperature: float = 1.0,
+        top_k: int = 50,
+        top_p: float = 0.95,
+        device: torch.device = torch.device('cuda'),
+):
     """Generate SMILES from model.
-    This generation only works for batch = 1
-
+    :param num_return_sequences:
     :param device:
     :param model: GPT2 model
     :param tokenizer: GPT2 tokenizer
@@ -75,16 +67,26 @@ def generate_smiles_FA(
     :param top_p: Top p for sampling
     :return: List of SMILES
     """
-    inputs = tokenizer(prompt, return_tensors="pt").to(device)
-    input_ids = inputs["input_ids"][0][:-1].reshape(1, -1)
-    outputs = []
-    for i in tqdm(range(n_samples)):
-        output = model.generate(input_ids=input_ids, max_length=64, temperature=temperature,
-                                top_k=top_k, top_p=top_p,
-                                eos_token_id=tokenizer.eos_token_id)
-        output = tokenizer.batch_decode(output, skip_special_tokens=True)[0].replace(" ", "")
-        outputs.append(output)
-    return outputs
+    input_ids = tokenizer.encode(prompt, return_tensors="pt").to(device)
+    input_ids = input_ids.repeat_interleave(num_return_sequences, dim=0)
+    # skip eos token
+    input_ids = input_ids[:, :-1]
+    generated_sequences = []
+    for i in tqdm(range(n_samples // num_return_sequences)):
+        output = model.generate(
+            input_ids,
+            max_length=64,
+            top_k=top_k,
+            top_p=top_p,
+            temperature=temperature,
+            eos_token_id=tokenizer.eos_token_id,
+            return_dict_in_generate=True,
+        )
+        sequences = filter_tokens_after_eos(output.sequences, eos_id=tokenizer.eos_token_id)
+        output = tokenizer.batch_decode(sequences, skip_special_tokens=True)
+        generated_sequences += [s.replace(" ", "") for s in output]
+
+    return generated_sequences
 
 
 def generate_smiles_HF(
@@ -306,32 +308,45 @@ def entrypoint(cfg: DictConfig):
     model = trainer.accelerator.prepare_model(model, evaluation_mode=True)
 
     # Generate SMILES and calculate metrics
-    generated_smiles = generate_smiles_HF(
-        model,
-        datamodule.tokenizer,
-        cfg.eval.n_samples,
-        cfg.eval.prompt,
-        cfg.eval.temperature,
-        cfg.eval.top_k,
-        cfg.eval.top_p,
-        cfg.eval.batch_size,
-        device=torch.device('cuda')
-    )
+    if isinstance(model, Llama_small_flash_atten) or isinstance(model, GPT2MolGen_flash_atten):
+        generated_smiles = generate_smiles_FA(
+            model=model,
+            tokenizer=datamodule.tokenizer,
+            n_samples=cfg.eval.n_samples,
+            num_return_sequences=cfg.eval.batch_size,
+            prompt=cfg.eval.prompt,
+            temperature=cfg.eval.temperature,
+            top_k=cfg.eval.top_k,
+            top_p=cfg.eval.top_p,
+            device=torch.device('cuda')
+        )
+    else:
+        generated_smiles = generate_smiles_HF(
+            model=model,
+            tokenizer=datamodule.tokenizer,
+            n_samples=cfg.eval.n_samples,
+            num_return_sequences=cfg.eval.batch_size,
+            prompt=cfg.eval.prompt,
+            temperature=cfg.eval.temperature,
+            top_k=cfg.eval.top_k,
+            top_p=cfg.eval.top_p,
+            device=torch.device('cuda')
+        )
     metrics = get_all_metrics(generated_smiles, n_jobs=cfg.eval.preprocess_num_jobs)
 
     # Convert the dictionary to a list of lists
     metrics_table = [[k, v] for k, v in metrics.items()]
     print(tabulate(metrics_table, headers=["Metric", "Value"], tablefmt="pretty"))
 
+    # Save the SMILES to a CSV file
+    df = pd.DataFrame(generated_smiles, columns=["SMILES"])
+    df.to_csv(os.path.join(output_dir, 'generated_smiles.csv'), index=False)
+
     # Convert the list of lists to a DataFrame
     df = pd.DataFrame(metrics_table, columns=["Metric", "Value"])
     df.to_csv(os.path.join(output_dir, 'metrics.csv'), index=False)
     if cfg.wandb_logs:
         wandb.log({"evaluation_metrics": wandb.Table(dataframe=df)})
-
-    # Save the SMILES to a CSV file
-    df = pd.DataFrame(generated_smiles, columns=["SMILES"])
-    df.to_csv(os.path.join(output_dir, 'generated_smiles.csv'), index=False)
 
 
 if __name__ == "__main__":
