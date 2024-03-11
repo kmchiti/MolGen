@@ -1,0 +1,9 @@
+dataset_name: "MolGen/PubChem"
+tokenizer_path: "./data/processed/training/tokenizers/PubChem_SMILES_30000.json"
+column: "SMILES"
+overwrite_cache: false
+max_seq_length: 512
+dataloader_num_workers: 4
+preprocess_num_workers: 24
+validation_size: 0.1
+val_split_seed: 42

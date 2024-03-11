@@ -11,4 +11,4 @@ source ~/anaconda3/bin/activate
 conda activate my-rdkit-env
 export HF_HOME=$SCRATCH/hf_home
 
-python prepare_data.py --config-name=pubchem_smiles
+python prepare_data.py --config-name=config_PubChem_atomwise

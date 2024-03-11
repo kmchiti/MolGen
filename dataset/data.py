@@ -16,7 +16,7 @@ class MolGenDataModule(object):
         dataset_name: str = None,
         tokenizer_path: str = None,
         tokenizer_name: str = None,
-        column: str = "SMILES",
+        mol_type: str = "SMILES",
         overwrite_cache: bool = None,
         max_seq_length: int = 64,
         dataloader_num_workers: int = 4,
@@ -32,7 +32,7 @@ class MolGenDataModule(object):
         self.preprocess_num_workers = preprocess_num_workers
         self.validation_size = validation_size
         self.val_split_seed = val_split_seed
-        self.column = column
+        self.mol_type = mol_type
 
         self.data_collator = None
         self.eval_dataset = None
@@ -45,19 +45,21 @@ class MolGenDataModule(object):
             tokenizer = PreTrainedTokenizerFast(tokenizer_file=tokenizer_path)
         else:
             raise "tokenizer not found"
-        tokenizer.add_special_tokens({"additional_special_tokens": ["<bos>", "<eos>", "[PAD]"]})  # type: ignore
+
         tokenizer.eos_token = "<eos>"
         tokenizer.bos_token = "<bos>"
         tokenizer.pad_token = "[PAD]"
 
-        # Add special tokens to the post processor
-        tokenizer._tokenizer.post_processor = TemplateProcessing(
-            single="<bos> $A <eos>",
-            special_tokens=[
-                ("<bos>", tokenizer.bos_token_id),
-                ("<eos>", tokenizer.eos_token_id),
-            ],
-        )
+        if tokenizer_path is not None and "BPE_pubchem_500" in tokenizer_path:
+            tokenizer.add_special_tokens({"additional_special_tokens": ["<bos>", "<eos>", "[PAD]"]})  # type: ignore
+            # Add special tokens to the post processor
+            tokenizer._tokenizer.post_processor = TemplateProcessing(
+                single="<bos> $A <eos>",
+                special_tokens=[
+                    ("<bos>", tokenizer.bos_token_id),
+                    ("<eos>", tokenizer.eos_token_id),
+                ],
+            )
 
         self.tokenizer = tokenizer
 
@@ -71,7 +73,7 @@ class MolGenDataModule(object):
         def tokenize_function(
             element: dict,
             max_length: int,
-            column: str,
+            mol_type: str,
             tokenizer: PreTrainedTokenizerFast,
         ) -> dict:
             """Tokenize a single element of the dataset.
@@ -79,14 +81,14 @@ class MolGenDataModule(object):
             Args:
                 element (dict): Dictionary with the data to be tokenized.
                 max_length (int): Maximum length of the tokenized sequence.
-                column (str): Column of the dataset to be tokenized.
+                mol_type (str): mol_type of the dataset to be tokenized.
                 tokenizer (PreTrainedTokenizerFast): Tokenizer to be used.
 
             Returns:
                 dict: Dictionary with the tokenized data.
             """
             outputs = tokenizer(
-                element[column],
+                element[mol_type],
                 truncation=True,
                 max_length=max_length,
                 padding="max_length",
@@ -103,7 +105,7 @@ class MolGenDataModule(object):
             load_from_cache_file=not self.overwrite_cache,
             fn_kwargs={
                 "max_length": self.max_seq_length,
-                "column": self.column,
+                "column": self.mol_type,
                 "tokenizer": self.tokenizer,
             },
         )
@@ -131,3 +133,21 @@ class MolGenDataModule(object):
             collate_fn=self.data_collator,
             num_workers=self.dataloader_num_workers,
         )
+
+    def get_maximum_length(self):
+        import multiprocessing
+        from functools import partial
+
+        # Load dataset
+        dataset = load_dataset(self.dataset_name, num_proc=self.dataloader_num_workers)
+        sequences = dataset["train"][self.mol_type]
+        def tokenize_and_get_length(sequence):
+            tokens = self.tokenizer(sequence, truncation=True, padding=True, return_tensors='pt')['input_ids']
+            return tokens.size(1)
+
+        pool = multiprocessing.Pool(processes=self.preprocess_num_workers)
+        tokenize_partial = partial(tokenize_and_get_length)
+        token_lengths = pool.map(tokenize_partial, sequences)
+        pool.close()
+        pool.join()
+        return max(token_lengths)

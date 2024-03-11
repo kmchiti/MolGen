@@ -8,6 +8,7 @@ def entrypoint(cfg: DictConfig):
 
     # Initialize DataModule
     datamodule = MolGenDataModule(**cfg.dataset)
+    print(f"maximum sequence length in samples: {datamodule.get_maximum_length()}")
     datamodule.setup()
     print(datamodule.tokenizer)
     print(datamodule.train_dataset)
