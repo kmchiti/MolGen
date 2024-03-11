@@ -105,7 +105,7 @@ class MolGenDataModule(object):
             load_from_cache_file=not self.overwrite_cache,
             fn_kwargs={
                 "max_length": self.max_seq_length,
-                "column": self.mol_type,
+                "mol_type": self.mol_type,
                 "tokenizer": self.tokenizer,
             },
         )
