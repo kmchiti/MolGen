@@ -2,8 +2,8 @@
 defaults:
   - _self_
   - dataset: pubchem_smiles_atomwise
-  - model: llama-small_flash_attention
-  - trainer: hf_trainer_FA
+  - model: llama-small_flash_attention_atomwise
+  - trainer: hf_trainer_FA_atomwise
   - eval: basic
 
 seed: 42
@@ -18,7 +18,7 @@ hydra:
 wandb_logs: true
 wandb:
   name: null
-  project: Molecule Language Model
-  entity: molgpt
+  project: small-molecule-generation
+  entity: drug-discovery
   tags: []
   mode: online
