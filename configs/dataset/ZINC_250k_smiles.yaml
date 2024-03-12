@@ -1,0 +1,9 @@
+dataset_name: "MolGen/ZINC_250k"
+tokenizer_path: "./data/processed/training/tokenizers/ZINC_250k_SMILES_bpe_30000.json"
+column: "SMILES"
+overwrite_cache: false
+max_seq_length: 32
+dataloader_num_workers: 4
+preprocess_num_workers: 24
+validation_size: 0.1
+val_split_seed: 42

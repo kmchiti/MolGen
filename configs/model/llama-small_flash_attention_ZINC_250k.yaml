@@ -1,0 +1,14 @@
+model_name_or_path: 'llama_small_FA'
+max_seq_length: 32
+vocab_size: 30000
+hidden_size: 640
+num_hidden_layers: 24
+num_attention_heads: 10
+intermediate_size: 2560
+bos_token_id: "<bos>"
+eos_token_id: "<eos>"
+use_flash_attn: true
+fused_bias_fc: false
+fused_mlp: false
+fused_dropout_add_ln: false
+residual_in_fp32: true

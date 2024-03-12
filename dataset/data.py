@@ -48,7 +48,10 @@ class MolGenDataModule(object):
 
         tokenizer.eos_token = "<eos>"
         tokenizer.bos_token = "<bos>"
-        tokenizer.pad_token = "[PAD]"
+        if tokenizer_path is not None and "ZINC_250k_SMILES_bpe_30000" in tokenizer_path:
+            tokenizer.pad_token = "<pad>"
+        else:
+            tokenizer.pad_token = "[PAD]"
 
         if tokenizer_path is not None and "BPE_pubchem_500" in tokenizer_path:
             tokenizer.add_special_tokens({"additional_special_tokens": ["<bos>", "<eos>", "[PAD]"]})  # type: ignore
