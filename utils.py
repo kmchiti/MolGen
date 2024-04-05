@@ -48,13 +48,15 @@ def creat_unique_experiment_name(config: DictConfig) -> str:
     _config = OmegaConf.to_container(copy.deepcopy(config))
     if 'eval' in _config.keys():
         _config.pop('eval', None)
+    if 'model_name_or_path' in _config.keys():
+       model_name_or_path =  _config.pop('model_name_or_path', '')
     model_arch = _config['model']['model_name_or_path']
     data_name = _config['dataset']['dataset_name'].replace("MolGen/", "")
     _config = unroll_configs(_config)
     # Convert the unrolled dictionary to a JSON string and hash it
     unrolled_json = json.dumps(_config, sort_keys=True)
     hash_name = hashlib.md5(unrolled_json.encode()).hexdigest()[:8]
-    exp_name = f"{model_arch}_{data_name}_{hash_name}"
+    exp_name = f"{model_arch}_{data_name}_{hash_name}_{model_name_or_path}"
     return exp_name
 
 # code from: https://github.com/huggingface/transformers/blob/bd50402b56980ff17e957342ef69bd9b0dd45a7b/src/transformers/trainer.py#L2758
