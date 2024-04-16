@@ -23,6 +23,6 @@ save_steps: 1000
 save_strategy: "steps"
 save_total_limit: 2
 torch_compile: false
-warmup_steps: 100
+warmup_ratio: 0.01
 weight_decay: 0.01
 save_spec_steps: 1000
