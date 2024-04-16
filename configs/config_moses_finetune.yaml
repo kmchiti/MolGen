@@ -16,7 +16,7 @@ hydra:
   run:
     dir: outputs/${now:%Y-%m-%d-%H-%M-%S}/hydra
 
-wandb_logs: false
+wandb_logs: true
 wandb:
   name: null
   project: Molecule Language Model
