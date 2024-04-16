@@ -4,7 +4,7 @@
 
 #SBATCH --partition=unkillable    # ask for unkillable job
 #SBATCH --gres=gpu:a100l:1
-#SBATCH --cpus-per-task=4              # number of cpus per gpu
+#SBATCH --cpus-per-task=6              # number of cpus per gpu
 #SBATCH --mem-per-gpu=32G               # memory per gpu
 #SBATCH --exclude=cn-k[001-002]
 
@@ -15,5 +15,5 @@ export HF_HOME=$SCRATCH/hf_home
 
 # wandb login --relogin 73fd65ff1623ce64c1f20ed621c065ec55d7eaa3
 
-python train.py --config-name=config_moses
+python finetune.py --config-name=config_moses_finetune
 conda deactivate
