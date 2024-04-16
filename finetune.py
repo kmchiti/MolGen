@@ -8,9 +8,12 @@ from dataset import MolGenDataModule
 from models import GPT2MolGen, GPT2MolGen_flash_atten, Llama_small_flash_atten
 from utils import creat_unique_experiment_name, is_world_process_zero, save_HF_model
 import torch
+import wandb
 from transformers import LlamaForCausalLM, LlamaConfig
 from flash_attn.models.gpt import GPTLMHeadModel
 from tabulate import tabulate
+import pandas as pd
+from eval import generate_smiles_HF, generate_smiles_FA, get_all_metrics
 import os
 
 
@@ -69,12 +72,53 @@ def entrypoint(cfg: DictConfig):
     # Train model
     train_result = trainer.train()
     trainer.save_model()  # Saves the tokenizer too for easy upload
-    if is_world_process_zero(train_args) and isinstance(model, GPTLMHeadModel):
-        print('save remapped HF model to:', os.path.join(output_dir, 'HF'))
-        model.save_HF_model(OmegaConf.to_container(cfg.model), datamodule.tokenizer,
-                            output_dir=os.path.join(output_dir, 'HF'),
-                            dataset_name=cfg.dataset['dataset_name'].replace("MolGen/", ""),
-                            token=cfg.write_HF_token)
+
+    # if is_world_process_zero(train_args) and isinstance(model, GPTLMHeadModel):
+    #     print('save remapped HF model to:', os.path.join(output_dir, 'HF'))
+    #     model.save_HF_model(OmegaConf.to_container(cfg.model), datamodule.tokenizer,
+    #                         output_dir=os.path.join(output_dir, 'HF'),
+    #                         dataset_name=cfg.dataset['dataset_name'].replace("MolGen/", ""),
+    #                         token=cfg.write_HF_token)
+
+    # Generate SMILES and calculate metrics
+    if isinstance(model, Llama_small_flash_atten) or isinstance(model, GPT2MolGen_flash_atten):
+        generated_smiles = generate_smiles_FA(
+            model=model,
+            tokenizer=datamodule.tokenizer,
+            n_samples=cfg.eval.n_samples,
+            num_return_sequences=cfg.eval.batch_size,
+            prompt=cfg.eval.prompt,
+            temperature=cfg.eval.temperature,
+            top_k=cfg.eval.top_k,
+            top_p=cfg.eval.top_p,
+            device=torch.device('cuda')
+        )
+    else:
+        generated_smiles = generate_smiles_HF(
+            model=model,
+            tokenizer=datamodule.tokenizer,
+            n_samples=cfg.eval.n_samples,
+            num_return_sequences=cfg.eval.batch_size,
+            prompt=cfg.eval.prompt,
+            temperature=cfg.eval.temperature,
+            top_k=cfg.eval.top_k,
+            top_p=cfg.eval.top_p,
+            device=torch.device('cuda')
+        )
+
+    # Save the SMILES to a CSV file
+    df = pd.DataFrame(generated_smiles, columns=["SMILES"])
+    df.to_csv(os.path.join(output_dir, 'generated_smiles.csv'), index=False)
+
+    metrics = get_all_metrics(generated_smiles, n_jobs=cfg.eval.preprocess_num_jobs)
+    # Convert the dictionary to a list of lists
+    metrics_table = [[k, v] for k, v in metrics.items()]
+    print(tabulate(metrics_table, headers=["Metric", "Value"], tablefmt="pretty"))
+
+    df = pd.DataFrame(metrics_table, columns=["Metric", "Value"])
+    df.to_csv(os.path.join(output_dir, 'metrics.csv'), index=False)
+    if cfg.wandb_logs:
+        wandb.log({"evaluation_metrics": wandb.Table(dataframe=df)})
 
 
 if __name__ == "__main__":

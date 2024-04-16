@@ -151,35 +151,8 @@ def get_all_metrics(
         ptest=None,
         ptest_scaffolds=None,
         train=None,
-        report: List[str] = ['all'],
+        report=['all'],
 ):
-    """Computes all available metrics between test (scaffold test) and generated sets of SMILES.
-
-    :param report:
-    :param gen: list of generated SMILES
-    :param k: int or list with values for unique@k. Will calculate number of unique molecules in the first k molecules. Default [1000, 10000]
-    :param n_jobs: number of workers for parallel processing
-    :param device: 'cpu' or 'cuda:n', where n is GPU device number
-    :param batch_size: batch size for FCD metric
-    :param pool: optional multiprocessing pool to use for parallelization
-    :param test: test SMILES. If None, will load a default test set
-    :param test_scaffolds: scaffold test SMILES. If None, will load a default scaffold test set
-    :param ptest: precalculated statistics of the test set. If None, will load default test statistics. If you specified a custom test set, default test statistics will be ignored
-    :param ptest_scaffolds: precalculated statistics of the scaffold test set If None, will load default scaffold test statistics. If you specified a custom test set, default test statistics will be ignored
-    :param train: train SMILES. If None, will load a default train set
-
-    Available metrics:
-        * %valid
-        * %unique@k
-        * Fragment similarity (Frag)
-        * Scaffold similarity (Scaf)
-        * Similarity to nearest neighbour (SNN)
-        * Internal diversity (IntDiv)
-        * Internal diversity 2: using square root of mean squared Tanimoto similarity (IntDiv2)
-        * %passes filters (Filters)
-        * Distribution difference for logP, SA, QED, weight
-        * Novelty (molecules not present in train)
-    """
     if test is None:
         if ptest is not None:
             raise ValueError("You cannot specify custom test " "statistics for default test set")
@@ -195,7 +168,8 @@ def get_all_metrics(
         test_scaffolds = get_dataset("test_scaffolds")
         ptest_scaffolds = get_statistics("test_scaffolds")
 
-    train = train or get_dataset("train")
+    if train is None:
+        train = get_dataset("train")
 
     if k is None:
         k = [1000, 10000]
