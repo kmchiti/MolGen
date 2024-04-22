@@ -163,7 +163,7 @@ def train_tokenizer(
     # Save the tokenizer
     if tokenizer_method == "kmer":
         tokenizer.pre_tokenizer = Whitespace()  # type: ignore
-    tokenizer.save(os.path.join(path_to_save, f"{dataset_name}_{mol_type}_{max_vocab_size}.json"))
+    tokenizer.save(os.path.join(path_to_save, f"{tokenizer_method}_{dataset_name}_{mol_type}_{max_vocab_size}.json"))
 
 
 if __name__ == "main":
