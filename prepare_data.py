@@ -36,7 +36,7 @@ def entrypoint(cfg: DictConfig):
 
     # Initialize DataModule
     datamodule = MolGenDataModule(**cfg)
-    # print(datamodule.tokenizer)
+    print(datamodule.tokenizer)
     # datamodule.setup()
     # print(datamodule.train_dataset)
     # print(datamodule.eval_dataset)
@@ -71,30 +71,41 @@ def entrypoint(cfg: DictConfig):
         },
     )
 
-    batch_size = 1000000
+    batch_size = 5000000
     total_rows = len(lengths_dataset['train'])
 
     max_len = 0
     for i in tqdm(range(0, total_rows, batch_size)):
-        max_len = max(max_len, max(lengths_dataset['train']['lengths'][i:i + batch_size]))
+        max_temp = np.max(lengths_dataset['train']['lengths'][i:i + batch_size])
+        max_len = max(max_len, max_temp)
+
+    # total_rows = len(lengths_dataset['test'])
+    # for i in tqdm(range(0, total_rows, batch_size)):
+    #     max_temp = np.max(lengths_dataset['test']['lengths'][i:i + batch_size])
+    #     max_len = max(max_len, max_temp)
 
     print('max_len:', max_len)
 
-    def compute_histogram(data_chunk):
-        return np.bincount(data_chunk, minlength=max_len+1)
-    # Number of splits; generally equal to or a multiple of the number of cores
-    num_splits = 24
-    chunk_size = len(lengths_dataset['train']['lengths']) // num_splits
+    histogram = []
+    for i in tqdm(range(0, total_rows, batch_size)):
+        hist = np.bincount(lengths_dataset['train']['lengths'][i:i + batch_size], minlength=max_len + 1)
+        histogram.append(hist)
 
-    histograms = []
-    with concurrent.futures.ProcessPoolExecutor(max_workers=num_splits) as executor:
-        futures = [executor.submit(compute_histogram, lengths_dataset['train']['lengths'][i * chunk_size:(i + 1) * chunk_size]) for i in
-                   range(num_splits)]
-        for future in concurrent.futures.as_completed(futures):
-            histograms.append(future.result())
+    # def compute_histogram(data_chunk):
+    #     return np.bincount(data_chunk, minlength=max_len+1)
+    # # Number of splits; generally equal to or a multiple of the number of cores
+    # num_splits = 24
+    # chunk_size = len(lengths_dataset['train']['lengths']) // num_splits
+    #
+    # histograms = []
+    # with concurrent.futures.ProcessPoolExecutor(max_workers=num_splits) as executor:
+    #     futures = [executor.submit(compute_histogram, lengths_dataset['train']['lengths'][i * chunk_size:(i + 1) * chunk_size]) for i in
+    #                range(num_splits)]
+    #     for future in concurrent.futures.as_completed(futures):
+    #         histograms.append(future.result())
 
     # Aggregate the histograms
-    final_histogram = np.sum(histograms, axis=0)
+    final_histogram = np.sum(histogram, axis=0)
     if datamodule.tokenizer_path is not None:
         save_path = datamodule.tokenizer_path.split('.json')[0] + '.npy'
         np.save(save_path, final_histogram)

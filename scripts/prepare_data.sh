@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=prepare-data-cpu
-#SBATCH --time=0-3:00
+#SBATCH --time=0-8:00
 #SBATCH --partition=long-cpu
 #SBATCH --cpus-per-task=24
 #SBATCH --mem=64G
