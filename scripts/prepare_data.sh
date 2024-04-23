@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=llama-cpu
+#SBATCH --job-name=prepare-data-cpu
 #SBATCH --time=0-3:00
 #SBATCH --partition=long-cpu
 #SBATCH --cpus-per-task=24

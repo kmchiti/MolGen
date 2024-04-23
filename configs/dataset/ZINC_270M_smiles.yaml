@@ -1,6 +1,6 @@
 dataset_name: "MolGen/ZINC_270M"
 tokenizer_path: "./data/processed/training/tokenizers/BPE_pubchem_500.json"
-column: "SMILES"
+mol_type: "SMILES"
 overwrite_cache: false
 max_seq_length: 64
 dataloader_num_workers: 4
