@@ -50,6 +50,8 @@ def creat_unique_experiment_name(config: DictConfig) -> str:
         _config.pop('eval', None)
     if 'model_name_or_path' in _config.keys():
        model_name_or_path = _config.pop('model_name_or_path', '')
+    else:
+        model_name_or_path = ''
     model_arch = _config['model']['model_name_or_path']
     data_name = _config['dataset']['dataset_name'].replace("MolGen/", "")
     _config = unroll_configs(_config)
