@@ -16,4 +16,4 @@ source ~/anaconda3/bin/activate
 conda activate my-rdkit-env
 export HF_HOME=$SCRATCH/hf_home
 
-torchrun --nproc_per_node=4 train.py --config-name=config_ZINC_270M_atomwise
+torchrun --nproc_per_node=4 train.py --config-name=train_ZINC_270M_atomwise

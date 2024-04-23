@@ -22,5 +22,5 @@ save_steps: 10000
 save_strategy: "steps"
 save_total_limit: 20
 torch_compile: false
-warmup_ratio: 0.0
+warmup_ratio: 0.02
 weight_decay: 0.01

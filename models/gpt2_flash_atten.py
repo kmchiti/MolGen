@@ -126,3 +126,7 @@ class GPT2MolGen_flash_atten(GPTLMHeadModel, ABC):
             loss=loss,
             logits=lm_logits,
         )
+
+    def save_HF_model(self, config, tokenizer, output_dir: str, dataset_name: str = None, token=None):
+        print('NOT IMPLEMENTED')
+        pass

@@ -23,3 +23,12 @@ class GPT2MolGen(GPT2LMHeadModel, ABC):
                             activation_function=activation_function,
                     )
         GPT2LMHeadModel.__init__(self, config)
+
+    def save_HF_model(self, config, tokenizer, output_dir: str, dataset_name: str = None, token=None):
+
+        self.save_pretrained(output_dir)
+        tokenizer.save_pretrained(output_dir)
+
+        upload_name = f'MolGen/GPT2-{dataset_name}'
+        self.push_to_hub(upload_name, token=token)
+        tokenizer.push_to_hub(upload_name, token=token)

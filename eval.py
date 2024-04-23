@@ -11,6 +11,7 @@ from multiprocessing import Pool
 from typing import List, Tuple
 from trainer import MyHFTrainer, MyTrainingArguments
 from callbacks import WandbCallback
+from fcd_torch import FCD as FCDMetric
 
 import pandas as pd
 from moses.dataset import get_dataset, get_statistics
@@ -207,10 +208,13 @@ def get_all_metrics(
             )
         mols = mapper(pool)(get_mol, gen)
         kwargs = {"n_jobs": pool, "device": device, "batch_size": batch_size}
+        kwargs_fcd = {'n_jobs': n_jobs, 'device': device, 'batch_size': batch_size}
+        metrics['FCD/Test'] = FCDMetric(**kwargs_fcd)(gen=gen, pref=ptest['FCD'])
         metrics["SNN/Test"] = SNNMetric(**kwargs)(gen=mols, pref=ptest["SNN"])
         metrics["Frag/Test"] = FragMetric(**kwargs)(gen=mols, pref=ptest["Frag"])
         metrics["Scaf/Test"] = ScafMetric(**kwargs)(gen=mols, pref=ptest["Scaf"])
         if ptest_scaffolds is not None:
+            metrics['FCD/TestSF'] = FCDMetric(**kwargs_fcd)(gen=gen, pref=ptest_scaffolds['FCD'])
             metrics["SNN/TestSF"] = SNNMetric(**kwargs)(gen=mols, pref=ptest_scaffolds["SNN"])
             metrics["Frag/TestSF"] = FragMetric(**kwargs)(gen=mols, pref=ptest_scaffolds["Frag"])
             metrics["Scaf/TestSF"] = ScafMetric(**kwargs)(gen=mols, pref=ptest_scaffolds["Scaf"])
