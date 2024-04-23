@@ -2,7 +2,7 @@
 defaults:
   - _self_
   - dataset: moses_smiles_atomwise
-  - model: llama-small_flash_attention_MOSES_atomwise
+  - model: gpt2_FA
   - trainer: hf_trainer_moses
   - eval: basic
 
@@ -18,7 +18,7 @@ hydra:
 wandb_logs: true
 wandb:
   name: null
-  project: Molecule Language Model
-  entity: molgpt
+  project: small-molecule-generation
+  entity: drug-discovery
   tags: []
   mode: online

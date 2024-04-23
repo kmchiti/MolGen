@@ -15,5 +15,5 @@ export HF_HOME=$SCRATCH/hf_home
 
 # wandb login --relogin 73fd65ff1623ce64c1f20ed621c065ec55d7eaa3
 
-python train.py --config-name=config_mosee
+python train.py --config-name=train_moses_gpt2
 conda deactivate

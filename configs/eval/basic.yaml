@@ -5,3 +5,4 @@ top_k: 50
 top_p: 0.95
 batch_size: 1024
 preprocess_num_jobs: 24
+eval_seed: 42

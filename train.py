@@ -34,14 +34,17 @@ def entrypoint(cfg: DictConfig):
 
     # Initialize model
     if cfg.model.model_name_or_path == 'gpt2_flash_atten':
-        model = GPT2MolGen_flash_atten(**cfg.model)
+        model = GPT2MolGen_flash_atten(**cfg.model, max_seq_length=datamodule.max_seq_length, vocab_size=datamodule.tokenizer.vocab_size)
     elif cfg.model.model_name_or_path in ['llama_small', 'llama_small_HF']:
-        model_cfg = LlamaConfig(**cfg.model)
+        model_cfg = LlamaConfig(**cfg.model, n_ctx=datamodule.max_seq_length, vocab_size=datamodule.tokenizer.vocab_size)
         model = LlamaForCausalLM(model_cfg)
     elif cfg.model.model_name_or_path == 'llama_small_FA':
-        model = Llama_small_flash_atten(**cfg.model)
+        model = Llama_small_flash_atten(**cfg.model, max_seq_length=datamodule.max_seq_length, vocab_size=datamodule.tokenizer.vocab_size)
+    elif cfg.model.model_name_or_path == 'gpt2':
+        model = GPT2MolGen(**cfg.model, max_seq_length=datamodule.max_seq_length,
+                           vocab_size=datamodule.tokenizer.vocab_size)
     else:
-        model = GPT2MolGen(**cfg.model)
+        raise NotImplementedError
 
     # Initialize trainer
     train_args = MyTrainingArguments(data_seed=cfg.seed, seed=cfg.seed, output_dir=output_dir,

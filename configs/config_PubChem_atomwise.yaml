@@ -2,7 +2,7 @@
 defaults:
   - _self_
   - dataset: pubchem_smiles_atomwise
-  - model: llama-small_flash_attention_atomwise
+  - model: llama-small_flash_attention
   - trainer: hf_trainer_FA_atomwise
   - eval: basic
 
