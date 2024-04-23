@@ -33,6 +33,8 @@ class MolGenDataModule(object):
         self.validation_size = validation_size
         self.val_split_seed = val_split_seed
         self.mol_type = mol_type
+        self.tokenizer_name = tokenizer_name
+        self.tokenizer_path = tokenizer_path
 
         self.data_collator = None
         self.eval_dataset = None

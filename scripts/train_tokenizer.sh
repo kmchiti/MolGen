@@ -11,5 +11,4 @@ source ~/anaconda3/bin/activate
 conda activate my-rdkit-env
 export HF_HOME=$SCRATCH/hf_home
 
-python dataset/tokenizer_train.py --dataset_name "
-ZINC_270M" --mol_type "SMILES" --tokenizer_method "atomwise" --max_vocab_size 30000
+python dataset/tokenizer_train.py --dataset_name "ZINC_270M" --mol_type "SMILES" --tokenizer_method "atomwise" --max_vocab_size 30000

@@ -166,7 +166,8 @@ def train_tokenizer(
     tokenizer.save(os.path.join(path_to_save, f"{tokenizer_method}_{dataset_name}_{mol_type}_{max_vocab_size}.json"))
 
 
-if __name__ == "main":
+if __name__ == "__main__":
+    print('===========start===========')
     parser = argparse.ArgumentParser()
     parser.add_argument("--dataset_name", type=str, default="ChEMBL")
     parser.add_argument("--mol_type", type=str, default="SMILES")
