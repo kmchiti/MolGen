@@ -37,92 +37,79 @@ def entrypoint(cfg: DictConfig):
     # Initialize DataModule
     datamodule = MolGenDataModule(**cfg)
     print(datamodule.tokenizer)
-    # datamodule.setup()
-    # print(datamodule.train_dataset)
-    # print(datamodule.eval_dataset)
+    datamodule.setup()
+    print(datamodule.train_dataset)
+    print(datamodule.eval_dataset)
 
-    dataset = load_dataset(datamodule.dataset_name, num_proc=datamodule.dataloader_num_workers)
-    if 'test' not in dataset.keys():
-        dataset = dataset["train"].train_test_split(test_size=datamodule.validation_size,
-                                                    seed=datamodule.val_split_seed)
-
-    def tokneize_and_extract_lengths(
-            element,
-            mol_type,
-            tokenizer,
-    ):
-        outputs = tokenizer(
-            element[mol_type],
-            truncation=True,
-            add_special_tokens=True,
-        )
-
-        return {"input_ids": outputs["input_ids"], "lengths": [len(x) for x in outputs['input_ids']]}
-
-    # Map function to extract lengths
-    lengths_dataset = dataset.map(
-        tokneize_and_extract_lengths,
-        batched=True,
-        remove_columns=dataset["train"].column_names,
-        num_proc=datamodule.preprocess_num_workers,
-        fn_kwargs={
-            "mol_type": datamodule.mol_type,
-            "tokenizer": datamodule.tokenizer,
-        },
-    )
-
-    batch_size = 5000000
-    total_rows = len(lengths_dataset['train'])
-
-    max_len = 0
-    for i in tqdm(range(0, total_rows, batch_size)):
-        max_temp = np.max(lengths_dataset['train']['lengths'][i:i + batch_size])
-        max_len = max(max_len, max_temp)
-
-    # total_rows = len(lengths_dataset['test'])
-    # for i in tqdm(range(0, total_rows, batch_size)):
-    #     max_temp = np.max(lengths_dataset['test']['lengths'][i:i + batch_size])
-    #     max_len = max(max_len, max_temp)
-
-    print('max_len:', max_len)
-
-    histogram = []
-    for i in tqdm(range(0, total_rows, batch_size)):
-        hist = np.bincount(lengths_dataset['train']['lengths'][i:i + batch_size], minlength=max_len + 1)
-        histogram.append(hist)
-
-    # def compute_histogram(data_chunk):
-    #     return np.bincount(data_chunk, minlength=max_len+1)
-    # # Number of splits; generally equal to or a multiple of the number of cores
-    # num_splits = 24
-    # chunk_size = len(lengths_dataset['train']['lengths']) // num_splits
+    # dataset = load_dataset(datamodule.dataset_name, num_proc=datamodule.dataloader_num_workers)
+    # if 'test' not in dataset.keys():
+    #     dataset = dataset["train"].train_test_split(test_size=datamodule.validation_size,
+    #                                                 seed=datamodule.val_split_seed)
     #
-    # histograms = []
-    # with concurrent.futures.ProcessPoolExecutor(max_workers=num_splits) as executor:
-    #     futures = [executor.submit(compute_histogram, lengths_dataset['train']['lengths'][i * chunk_size:(i + 1) * chunk_size]) for i in
-    #                range(num_splits)]
-    #     for future in concurrent.futures.as_completed(futures):
-    #         histograms.append(future.result())
-
-    # Aggregate the histograms
-    final_histogram = np.sum(histogram, axis=0)
-    if datamodule.tokenizer_path is not None:
-        save_path = datamodule.tokenizer_path.split('.json')[0] + '.npy'
-        np.save(save_path, final_histogram)
-    else:
-        save_path = './data/processed/training/tokenizers' + f'{datamodule.tokenizer_name}.npy'
-        np.save(save_path, final_histogram)
-
-    set_plot_style()
-    fig, axes = plt.subplots(figsize=(8, 5))
-    fig.tight_layout()
-    train_counts = final_histogram
-    train_bins = np.arange(len(final_histogram))
-    axes.hist(train_bins, weights=train_counts, log=True, alpha=0.7)
-    axes.legend()
-    axes.set_xlabel('Length of samples')
-    axes.grid()
-    plt.savefig(f'{save_path[:-4]}.png')
+    # def tokneize_and_extract_lengths(
+    #         element,
+    #         mol_type,
+    #         tokenizer,
+    # ):
+    #     outputs = tokenizer(
+    #         element[mol_type],
+    #         truncation=True,
+    #         add_special_tokens=True,
+    #     )
+    #
+    #     return {"input_ids": outputs["input_ids"], "lengths": [len(x) for x in outputs['input_ids']]}
+    #
+    # # Map function to extract lengths
+    # lengths_dataset = dataset.map(
+    #     tokneize_and_extract_lengths,
+    #     batched=True,
+    #     remove_columns=dataset["train"].column_names,
+    #     num_proc=datamodule.preprocess_num_workers,
+    #     fn_kwargs={
+    #         "mol_type": datamodule.mol_type,
+    #         "tokenizer": datamodule.tokenizer,
+    #     },
+    # )
+    #
+    # batch_size = 5000000
+    # total_rows = len(lengths_dataset['train'])
+    #
+    # max_len = 0
+    # for i in tqdm(range(0, total_rows, batch_size)):
+    #     max_temp = np.max(lengths_dataset['train']['lengths'][i:i + batch_size])
+    #     max_len = max(max_len, max_temp)
+    #
+    # # total_rows = len(lengths_dataset['test'])
+    # # for i in tqdm(range(0, total_rows, batch_size)):
+    # #     max_temp = np.max(lengths_dataset['test']['lengths'][i:i + batch_size])
+    # #     max_len = max(max_len, max_temp)
+    #
+    # print('max_len:', max_len)
+    #
+    # histogram = []
+    # for i in tqdm(range(0, total_rows, batch_size)):
+    #     hist = np.bincount(lengths_dataset['train']['lengths'][i:i + batch_size], minlength=max_len + 1)
+    #     histogram.append(hist)
+    #
+    # # Aggregate the histograms
+    # final_histogram = np.sum(histogram, axis=0)
+    # if datamodule.tokenizer_path is not None:
+    #     save_path = datamodule.tokenizer_path.split('.json')[0] + '.npy'
+    #     np.save(save_path, final_histogram)
+    # else:
+    #     save_path = './data/processed/training/tokenizers' + f'{datamodule.tokenizer_name}.npy'
+    #     np.save(save_path, final_histogram)
+    #
+    # set_plot_style()
+    # fig, axes = plt.subplots(figsize=(8, 5))
+    # fig.tight_layout()
+    # train_counts = final_histogram
+    # train_bins = np.arange(len(final_histogram))
+    # axes.hist(train_bins, weights=train_counts, log=True, alpha=0.7)
+    # axes.legend()
+    # axes.set_xlabel('Length of samples')
+    # axes.grid()
+    # plt.savefig(f'{save_path[:-4]}.png')
 
 
 if __name__ == "__main__":
