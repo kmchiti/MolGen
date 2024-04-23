@@ -2,7 +2,7 @@
 defaults:
   - _self_
   - dataset: moses_smiles_atomwise
-  - model: gpt2_FA
+  - model: llama-small_flash_attention
   - trainer: hf_trainer_moses
   - eval: basic
 
