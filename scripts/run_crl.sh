@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=gpt2
+#SBATCH --job-name=llama-ZINC270
 #SBATCH --time=3-00:00
 
 #SBATCH --partition=lab-chandar
@@ -15,4 +15,4 @@ source ~/anaconda3/bin/activate
 conda activate my-rdkit-env
 export HF_HOME=$SCRATCH/hf_home
 
-torchrun --nproc_per_node=4 train.py --config-name=config_PubChem_atomwise
+torchrun --nproc_per_node=4 train.py --config-name=config_ZINC_270M_atomwise
