@@ -15,5 +15,5 @@ export HF_HOME=$SCRATCH/hf_home
 
 # wandb login --relogin 73fd65ff1623ce64c1f20ed621c065ec55d7eaa3
 
-python finetune.py --config-name=config_moses_finetune
+python train.py --config-name=config_mosee
 conda deactivate

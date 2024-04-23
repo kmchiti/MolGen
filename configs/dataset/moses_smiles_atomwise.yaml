@@ -2,7 +2,7 @@ dataset_name: "MolGen/MOSES"
 tokenizer_path: "./data/processed/training/tokenizers/atomwise_MOSES_SMILES_30000.json"
 mol_type: "SMILES"
 overwrite_cache: false
-max_seq_length: 2048
+max_seq_length: 64
 dataloader_num_workers: 4
 preprocess_num_workers: 24
 validation_size: 0.1

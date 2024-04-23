@@ -1,8 +1,8 @@
 # The Defaults List is a list in an input config that instructs Hydra how to build the output config.
 defaults:
   - _self_
-  - dataset: moses_smiles
-  - model: llama-small_flash_attention
+  - dataset: moses_smiles_atomwise
+  - model: llama-small_flash_attention_MOSES_atomwise
   - trainer: hf_trainer_moses
   - eval: basic
 
