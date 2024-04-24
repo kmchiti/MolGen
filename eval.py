@@ -420,11 +420,12 @@ def entrypoint(args):
             result = pd.read_csv(save_path, index_col=0)
         else:
             result = pd.DataFrame()
-        df_new_row = pd.DataFrame(metrics, index=[])
+        df_new_row = pd.DataFrame(metrics, index=[seed])
         result = pd.concat([result, df_new_row])
         result.to_csv(save_path)
 
 
 if __name__ == "__main__":
+    os.environ['TOKENIZERS_PARALLELISM'] = 'true'
     args = args_parser()
     entrypoint(args)
