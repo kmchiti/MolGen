@@ -45,7 +45,7 @@ def args_parser():
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--config_name', default="train_moses_llama", type=str,
                         help='name of the trained config')
-    parser.add_argument('--seeds', nargs='+', type=int, default=[42],
+    parser.add_argument('--seeds', nargs='+', type=int, default=[42, 1335, 2024],
                         help='list of seed integers for random number generation')
     parser.add_argument('--num_samples', default=30000, type=int, help='number of samples to generate')
     parser.add_argument('--batch_size', default=1024, type=int, help='batch size')
