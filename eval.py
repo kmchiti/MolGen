@@ -13,6 +13,7 @@ from hydra import compose, initialize
 from trainer import MyHFTrainer, MyTrainingArguments
 from callbacks import WandbCallback
 from fcd_torch import FCD as FCDMetric
+import argparse
 
 import pandas as pd
 from moses.dataset import get_dataset, get_statistics
@@ -38,6 +39,24 @@ import copy
 
 MOLECULAR_PERFORMANCE_RESULT_PATH = './molecular_performance_MOSES.csv'
 
+def args_parser():
+    parser = argparse.ArgumentParser(
+        description='Molecules Generation',
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument('--config_name', default="train_moses_llama", type=str,
+                        help='name of the trained config')
+    parser.add_argument('--seeds', nargs='+', type=int, default=[42],
+                        help='list of seed integers for random number generation')
+    parser.add_argument('--num_samples', default=30000, type=int, help='number of samples to generate')
+    parser.add_argument('--batch_size', default=1024, type=int, help='batch size')
+    parser.add_argument('--top_k', default=50, type=int, help='top_k')
+    parser.add_argument('--top_p', default=0.95, type=float, help='top_p')
+    parser.add_argument('--temperature', default=1.0, type=float, help='temperature')
+    parser.add_argument('--prompt', default="", type=str, help='input prompt to generate')
+    parser.add_argument('--preprocess_num_jobs', default=24, type=int, help='preprocess_num_jobs')
+    args = parser.parse_args()
+    return args
+
 def filter_tokens_after_eos(sequences, eos_id):
     output = copy.deepcopy(sequences)
     for i in range(sequences.size(0)):
@@ -57,9 +76,11 @@ def generate_smiles_FA(
         temperature: float = 1.0,
         top_k: int = 50,
         top_p: float = 0.95,
+        max_length: int = 64,
         device: torch.device = torch.device('cuda'),
 ):
     """Generate SMILES from model.
+    :param max_length:
     :param num_return_sequences:
     :param device:
     :param model: GPT2 model
@@ -79,7 +100,7 @@ def generate_smiles_FA(
     for i in tqdm(range(n_samples // num_return_sequences)):
         output = model.generate(
             input_ids,
-            max_length=64,
+            max_length=max_length,
             top_k=top_k,
             top_p=top_p,
             temperature=temperature,
@@ -103,10 +124,12 @@ def generate_smiles_HF(
         temperature: float = 1.0,
         top_k: int = 50,
         top_p: float = 0.95,
+        max_length: int = 64,
         device: torch.device = torch.device('cuda'),
 ):
     """Generate SMILES from model.
 
+        :param max_length:
         :param num_return_sequences:
         :param device:
         :param no_repeat_ngram_size:
@@ -126,7 +149,7 @@ def generate_smiles_HF(
     for i in tqdm(range(n_samples // num_return_sequences)):
         output = model.generate(
             input_ids,
-            max_length=64,
+            max_length=max_length,
             num_return_sequences=num_return_sequences,
             no_repeat_ngram_size=no_repeat_ngram_size,
             top_k=top_k,
@@ -304,41 +327,39 @@ def get_spec_metrics(
     return metrics
 
 
-@hydra.main(version_base=None, config_path="configs", config_name="config_eval")
-def entrypoint(cfg: DictConfig):
+def entrypoint(args):
     # Initialize setup
     with initialize(version_base=None, config_path="configs"):
-        cfg_main = compose(config_name="train_moses_llama")
+        cfg = compose(config_name=args.config_name)
 
     # Initialize setup
-    set_seed(cfg_main.seed)
-    exp_name = creat_unique_experiment_name(cfg_main)
-    output_dir = os.path.join(cfg_main.save_path, exp_name)
+    exp_name = creat_unique_experiment_name(cfg)
+    output_dir = os.path.join(cfg.save_path, exp_name)
     os.makedirs(output_dir, exist_ok=True)
 
     # Initialize DataModule
-    datamodule = MolGenDataModule(**cfg_main.dataset)
+    datamodule = MolGenDataModule(**cfg.dataset)
 
     # Initialize model
-    if cfg_main.model.model_name_or_path == 'gpt2_flash_atten':
-        model = GPT2MolGen_flash_atten(**cfg_main.model, max_seq_length=datamodule.max_seq_length,
+    if cfg.model.model_name_or_path == 'gpt2_flash_atten':
+        model = GPT2MolGen_flash_atten(**cfg.model, max_seq_length=datamodule.max_seq_length,
                                        vocab_size=datamodule.tokenizer.vocab_size)
-    elif cfg_main.model.model_name_or_path in ['llama_small', 'llama_small_HF']:
-        model_cfg = LlamaConfig(**cfg_main.model, n_ctx=datamodule.max_seq_length,
+    elif cfg.model.model_name_or_path in ['llama_small', 'llama_small_HF']:
+        model_cfg = LlamaConfig(**cfg.model, n_ctx=datamodule.max_seq_length,
                                 vocab_size=datamodule.tokenizer.vocab_size)
         model = LlamaForCausalLM(model_cfg)
-    elif cfg_main.model.model_name_or_path == 'llama_small_FA':
-        model = Llama_small_flash_atten(**cfg_main.model, max_seq_length=datamodule.max_seq_length,
+    elif cfg.model.model_name_or_path == 'llama_small_FA':
+        model = Llama_small_flash_atten(**cfg.model, max_seq_length=datamodule.max_seq_length,
                                         vocab_size=datamodule.tokenizer.vocab_size)
-    elif cfg_main.model.model_name_or_path == 'gpt2':
-        model = GPT2MolGen(**cfg_main.model, max_seq_length=datamodule.max_seq_length,
+    elif cfg.model.model_name_or_path == 'gpt2':
+        model = GPT2MolGen(**cfg.model, max_seq_length=datamodule.max_seq_length,
                            vocab_size=datamodule.tokenizer.vocab_size)
     else:
         raise NotImplementedError
 
     # Initialize trainer
     wandb_callback = None
-    train_args = MyTrainingArguments(data_seed=cfg_main.seed, seed=cfg_main.seed, output_dir=output_dir, **cfg_main.trainer)
+    train_args = MyTrainingArguments(data_seed=cfg.seed, seed=cfg.seed, output_dir=output_dir, **cfg.trainer)
 
     trainer = MyHFTrainer(model=model,
                           args=train_args,
@@ -355,31 +376,33 @@ def entrypoint(cfg: DictConfig):
 
     # Generate SMILES and calculate metrics
     model.eval()
-    for seed in cfg.seeds:
+    for seed in args.seeds:
         print(f" ============= start generate for seed={seed} =============")
         set_seed(seed)
         if isinstance(model, Llama_small_flash_atten) or isinstance(model, GPT2MolGen_flash_atten):
             generated_smiles = generate_smiles_FA(
                 model=model,
                 tokenizer=datamodule.tokenizer,
-                n_samples=cfg_main.eval.n_samples,
-                num_return_sequences=cfg_main.eval.batch_size,
-                prompt=cfg_main.eval.prompt,
-                temperature=cfg_main.eval.temperature,
-                top_k=cfg_main.eval.top_k,
-                top_p=cfg_main.eval.top_p,
+                n_samples=args.n_samples,
+                num_return_sequences=args.batch_size,
+                prompt=args.prompt,
+                temperature=args.temperature,
+                top_k=args.top_k,
+                top_p=args.top_p,
+                max_length=datamodule.max_seq_length,
                 device=torch.device('cuda')
             )
         else:
             generated_smiles = generate_smiles_HF(
                 model=model,
                 tokenizer=datamodule.tokenizer,
-                n_samples=cfg_main.eval.n_samples,
-                num_return_sequences=cfg_main.eval.batch_size,
-                prompt=cfg_main.eval.prompt,
-                temperature=cfg_main.eval.temperature,
-                top_k=cfg_main.eval.top_k,
-                top_p=cfg_main.eval.top_p,
+                n_samples=args.n_samples,
+                num_return_sequences=args.batch_size,
+                prompt=args.prompt,
+                temperature=args.temperature,
+                top_k=args.top_k,
+                top_p=args.top_p,
+                max_length=datamodule.max_seq_length,
                 device=torch.device('cuda')
             )
 
@@ -388,7 +411,7 @@ def entrypoint(cfg: DictConfig):
         df.to_csv(os.path.join(output_dir, f'generated_smiles_{seed}.csv'), index=False)
 
         # compute metrics
-        metrics = get_spec_metrics(generated_smiles, n_jobs=cfg_main.eval.preprocess_num_jobs)
+        metrics = get_spec_metrics(generated_smiles, n_jobs=cfg.eval.preprocess_num_jobs)
         metrics_table = [[k, v] for k, v in metrics.items()]
         print(tabulate(metrics_table, headers=["Metric", "Value"], tablefmt="pretty"))
 
@@ -402,6 +425,6 @@ def entrypoint(cfg: DictConfig):
         result.to_csv(save_path)
 
 
-
 if __name__ == "__main__":
-    entrypoint()
+    args = args_parser()
+    entrypoint(args)
