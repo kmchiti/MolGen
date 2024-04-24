@@ -15,7 +15,9 @@ from trainer import MyHFTrainer, MyTrainingArguments
 from callbacks import WandbCallback
 from fcd_torch import FCD as FCDMetric
 import argparse
-
+from tdc import Oracle
+from rdkit import Chem
+from rdkit.Chem import Draw
 import pandas as pd
 from moses.dataset import get_dataset, get_statistics
 from moses.metrics.metrics import (
@@ -39,7 +41,7 @@ from tqdm import tqdm
 import copy
 
 MOLECULAR_PERFORMANCE_RESULT_PATH = './molecular_performance_MOSES.csv'
-
+PYTDC_RESULT_PATH = 'PyTDC_results'
 def args_parser():
     parser = argparse.ArgumentParser(
         description='Molecules Generation',
@@ -329,6 +331,34 @@ def get_spec_metrics(
     return metrics
 
 
+def evaluate_PyTDC_tasks(generated_smiles):
+    target_names = ['drd2', 'qed',
+                  'celecoxib_rediscovery', 'troglitazone_rediscovery', 'thiothixene_rediscovery',
+                  'albuterol_similarity', 'mestranol_similarity',
+                  'isomers_c7h8n2o2', 'isomers_c9h10n2o2pf2cl',
+                  'median1', 'median2',
+                  'mpo',
+                  'valsartan_smarts'] #'gsk3b' 'jnk3',
+    def _update_metrics(dict, new_dict):
+        for key, value in new_dict.items():
+            if key in dict:
+                dict[key].append(value)
+            else:
+                dict[key] = [value]
+    metrics = {}
+    for target_name in target_names:
+        result = {}
+        orcal_function = Oracle(name=target_name)
+        output = orcal_function(generated_smiles)
+        if isinstance(output, dict):
+            for k,v in output.items():
+                result[f'{k}_{target_name}'] = v
+        else:
+            result[target_name] = output
+        _update_metrics(metrics, result)
+    metrics = {k:v[0] for k,v in metrics.items()}
+    return metrics
+
 def entrypoint(args):
     # Initialize setup
     with initialize(version_base=None, config_path="configs"):
@@ -483,7 +513,21 @@ def entrypoint(args):
             df = pd.DataFrame(generated_smiles, columns=["SMILES"])
             df.to_csv(os.path.join(output_dir, f'generated_smiles_{seed}.csv'), index=False)
 
-            # compute metrics
+            # compute PyTDC metrics
+            PyTDC_result = evaluate_PyTDC_tasks(generated_smiles)
+            df = pd.DataFrame(PyTDC_result)
+            df.to_csv(os.path.join(output_dir, PYTDC_RESULT_PATH+'.csv'), index=False)
+            top100_df = pd.DataFrame({col: df[col].nlargest(100).values for col in df})
+            top10_df = top100_df.head(10)
+            top1_df = top100_df.head(1)
+            top100_df.loc['mean'] = top100_df.mean()
+            top10_df.loc['mean'] = top10_df.mean()
+            top1_df.loc['mean'] = top1_df.mean()
+            top100_df.to_csv(os.path.join(output_dir, PYTDC_RESULT_PATH+'_top100.csv'), index=False)
+            top10_df.to_csv(os.path.join(output_dir, PYTDC_RESULT_PATH + '_top10.csv'), index=False)
+            top1_df.to_csv(os.path.join(output_dir, PYTDC_RESULT_PATH + '_top1.csv'), index=False)
+
+            # compute MOSES metrics
             metrics = get_spec_metrics(generated_smiles, n_jobs=args.preprocess_num_jobs)
             metrics_table = [[k, v] for k, v in metrics.items()]
             print(tabulate(metrics_table, headers=["Metric", "Value"], tablefmt="pretty"))
@@ -496,6 +540,7 @@ def entrypoint(args):
             df_new_row = pd.DataFrame(metrics, index=[seed])
             result = pd.concat([result, df_new_row])
             result.to_csv(save_path)
+
 
         mean_values = result.mean()
         std_values = result.std()

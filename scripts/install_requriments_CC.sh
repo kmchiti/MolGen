@@ -44,3 +44,4 @@ pip install wheel setuptools py-cpuinfo
 pip install 'molvs==0.1.1'
 pip install 'selfies==2.1.1'
 pip install 'tabulate==0.9.0'
+pip install 'PyTDC==0.3.9'

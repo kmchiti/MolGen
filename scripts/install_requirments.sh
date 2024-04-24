@@ -22,6 +22,7 @@ pip install 'PyTDC'
 pip install 'rdkit'
 pip install 'CIRpy==1.0.2'
 pip install 'tabulate==0.9.0'
+pip install 'PyTDC==0.3.9'
 
 # Clone and install flash-attention v2
 NV_CC="8.0;8.6" # flash-attention-v2 and exllama_kernels are anyway limited to CC of 8.0+
