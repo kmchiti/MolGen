@@ -5,6 +5,7 @@ from dataset import MolGenDataModule
 from models import GPT2MolGen, GPT2MolGen_flash_atten, Llama_small_flash_atten
 from utils import creat_unique_experiment_name, is_world_process_zero
 import wandb
+import re
 import torch
 import os
 from multiprocessing import Pool
@@ -54,6 +55,7 @@ def args_parser():
     parser.add_argument('--temperature', default=1.0, type=float, help='temperature')
     parser.add_argument('--prompt', default="", type=str, help='input prompt to generate')
     parser.add_argument('--preprocess_num_jobs', default=24, type=int, help='preprocess_num_jobs')
+    parser.add_argument('--evaluate_on_checkpoints', dest='evaluate_on_checkpoints', action='store_true', help='evaluate model on all checkpoints')
     args = parser.parse_args()
     return args
 
@@ -370,58 +372,135 @@ def entrypoint(args):
                           eval_dataset=datamodule.eval_dataset,
                           evaluation_task=None,
                           )
-    print(f"load checkpoint from: {output_dir}")
-    trainer._load_from_checkpoint(output_dir)
-    model = trainer.accelerator.prepare_model(model, evaluation_mode=True)
 
-    # Generate SMILES and calculate metrics
-    model.eval()
-    for seed in args.seeds:
-        print(f" ============= start generate for seed={seed} =============")
-        set_seed(seed)
-        if isinstance(model, Llama_small_flash_atten) or isinstance(model, GPT2MolGen_flash_atten):
-            generated_smiles = generate_smiles_FA(
-                model=model,
-                tokenizer=datamodule.tokenizer,
-                n_samples=args.num_samples,
-                num_return_sequences=args.batch_size,
-                prompt=args.prompt,
-                temperature=args.temperature,
-                top_k=args.top_k,
-                top_p=args.top_p,
-                max_length=datamodule.max_seq_length,
-                device=torch.device('cuda')
-            )
-        else:
-            generated_smiles = generate_smiles_HF(
-                model=model,
-                tokenizer=datamodule.tokenizer,
-                n_samples=args.num_samples,
-                num_return_sequences=args.batch_size,
-                prompt=args.prompt,
-                temperature=args.temperature,
-                top_k=args.top_k,
-                top_p=args.top_p,
-                max_length=datamodule.max_seq_length,
-                device=torch.device('cuda')
-            )
+    if args.evaluate_on_checkpoints:
+        all_files = os.listdir(os.path.join(output_dir))
+        tmp_spec_checkpoints = [file for file in all_files if re.match(r'tmp-spec-checkpoint-\d+', file)]
+        tmp_spec_checkpoints.sort(key=lambda x: int(re.search(r'\d+', x).group()))
+        global_iters = [int(re.search(r'\d+', file).group()) for file in tmp_spec_checkpoints]
 
-        # Save the SMILES to a CSV file
-        df = pd.DataFrame(generated_smiles, columns=["SMILES"])
-        df.to_csv(os.path.join(output_dir, f'generated_smiles_{seed}.csv'), index=False)
+        for i in range(len(tmp_spec_checkpoints)):
+            checkpoint_path = os.path.join(output_dir, tmp_spec_checkpoints[i])
+            print('+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++')
+            print(f"load checkpoint from: {checkpoint_path}")
+            trainer._load_from_checkpoint(checkpoint_path)
+            model = trainer.accelerator.prepare_model(model, evaluation_mode=True)
 
-        # compute metrics
-        metrics = get_spec_metrics(generated_smiles, n_jobs=cfg.eval.preprocess_num_jobs)
-        metrics_table = [[k, v] for k, v in metrics.items()]
-        print(tabulate(metrics_table, headers=["Metric", "Value"], tablefmt="pretty"))
+            # Generate SMILES and calculate metrics
+            model.eval()
+            for seed in args.seeds:
+                print(f" ============= start generate for seed={seed} =============")
+                set_seed(seed)
+                if isinstance(model, Llama_small_flash_atten) or isinstance(model, GPT2MolGen_flash_atten):
+                    generated_smiles = generate_smiles_FA(
+                        model=model,
+                        tokenizer=datamodule.tokenizer,
+                        n_samples=args.num_samples,
+                        num_return_sequences=args.batch_size,
+                        prompt=args.prompt,
+                        temperature=args.temperature,
+                        top_k=args.top_k,
+                        top_p=args.top_p,
+                        max_length=datamodule.max_seq_length,
+                        device=torch.device('cuda')
+                    )
+                else:
+                    generated_smiles = generate_smiles_HF(
+                        model=model,
+                        tokenizer=datamodule.tokenizer,
+                        n_samples=args.num_samples,
+                        num_return_sequences=args.batch_size,
+                        prompt=args.prompt,
+                        temperature=args.temperature,
+                        top_k=args.top_k,
+                        top_p=args.top_p,
+                        max_length=datamodule.max_seq_length,
+                        device=torch.device('cuda')
+                    )
 
-        save_path = os.path.join(output_dir, MOLECULAR_PERFORMANCE_RESULT_PATH)
-        if os.path.exists(save_path):
-            result = pd.read_csv(save_path, index_col=0)
-        else:
-            result = pd.DataFrame()
-        df_new_row = pd.DataFrame(metrics, index=[seed])
-        result = pd.concat([result, df_new_row])
+                # Save the SMILES to a CSV file
+                df = pd.DataFrame(generated_smiles, columns=["SMILES"])
+                df.to_csv(os.path.join(checkpoint_path, f'generated_smiles_{seed}.csv'), index=False)
+
+                # compute metrics
+                metrics = get_spec_metrics(generated_smiles, n_jobs=cfg.eval.preprocess_num_jobs)
+                metrics_table = [[k, v] for k, v in metrics.items()]
+                print(tabulate(metrics_table, headers=["Metric", "Value"], tablefmt="pretty"))
+
+                save_path = os.path.join(checkpoint_path, MOLECULAR_PERFORMANCE_RESULT_PATH)
+                if os.path.exists(save_path):
+                    result = pd.read_csv(save_path, index_col=0)
+                else:
+                    result = pd.DataFrame()
+                df_new_row = pd.DataFrame(metrics, index=[seed])
+                result = pd.concat([result, df_new_row])
+                result.to_csv(save_path)
+
+            mean_values = result.mean()
+            std_values = result.std()
+            result.loc['mean'] = mean_values
+            result.loc['std'] = std_values
+            result.to_csv(save_path)
+
+    else:
+        print(f"load checkpoint from: {output_dir}")
+        trainer._load_from_checkpoint(output_dir)
+        model = trainer.accelerator.prepare_model(model, evaluation_mode=True)
+
+        # Generate SMILES and calculate metrics
+        model.eval()
+        for seed in args.seeds:
+            print(f" ============= start generate for seed={seed} =============")
+            set_seed(seed)
+            if isinstance(model, Llama_small_flash_atten) or isinstance(model, GPT2MolGen_flash_atten):
+                generated_smiles = generate_smiles_FA(
+                    model=model,
+                    tokenizer=datamodule.tokenizer,
+                    n_samples=args.num_samples,
+                    num_return_sequences=args.batch_size,
+                    prompt=args.prompt,
+                    temperature=args.temperature,
+                    top_k=args.top_k,
+                    top_p=args.top_p,
+                    max_length=datamodule.max_seq_length,
+                    device=torch.device('cuda')
+                )
+            else:
+                generated_smiles = generate_smiles_HF(
+                    model=model,
+                    tokenizer=datamodule.tokenizer,
+                    n_samples=args.num_samples,
+                    num_return_sequences=args.batch_size,
+                    prompt=args.prompt,
+                    temperature=args.temperature,
+                    top_k=args.top_k,
+                    top_p=args.top_p,
+                    max_length=datamodule.max_seq_length,
+                    device=torch.device('cuda')
+                )
+
+            # Save the SMILES to a CSV file
+            df = pd.DataFrame(generated_smiles, columns=["SMILES"])
+            df.to_csv(os.path.join(output_dir, f'generated_smiles_{seed}.csv'), index=False)
+
+            # compute metrics
+            metrics = get_spec_metrics(generated_smiles, n_jobs=cfg.eval.preprocess_num_jobs)
+            metrics_table = [[k, v] for k, v in metrics.items()]
+            print(tabulate(metrics_table, headers=["Metric", "Value"], tablefmt="pretty"))
+
+            save_path = os.path.join(output_dir, MOLECULAR_PERFORMANCE_RESULT_PATH)
+            if os.path.exists(save_path):
+                result = pd.read_csv(save_path, index_col=0)
+            else:
+                result = pd.DataFrame()
+            df_new_row = pd.DataFrame(metrics, index=[seed])
+            result = pd.concat([result, df_new_row])
+            result.to_csv(save_path)
+
+        mean_values = result.mean()
+        std_values = result.std()
+        result.loc['mean'] = mean_values
+        result.loc['std'] = std_values
         result.to_csv(save_path)
 
 
