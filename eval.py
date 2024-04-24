@@ -54,7 +54,7 @@ def args_parser():
     parser.add_argument('--top_p', default=0.95, type=float, help='top_p')
     parser.add_argument('--temperature', default=1.0, type=float, help='temperature')
     parser.add_argument('--prompt', default="", type=str, help='input prompt to generate')
-    parser.add_argument('--preprocess_num_jobs', default=24, type=int, help='preprocess_num_jobs')
+    parser.add_argument('--preprocess_num_jobs', default=6, type=int, help='preprocess_num_jobs')
     parser.add_argument('--evaluate_on_checkpoints', dest='evaluate_on_checkpoints', action='store_true', help='evaluate model on all checkpoints')
     args = parser.parse_args()
     return args
@@ -423,7 +423,7 @@ def entrypoint(args):
                 df.to_csv(os.path.join(checkpoint_path, f'generated_smiles_{seed}.csv'), index=False)
 
                 # compute metrics
-                metrics = get_spec_metrics(generated_smiles, n_jobs=cfg.eval.preprocess_num_jobs)
+                metrics = get_spec_metrics(generated_smiles, n_jobs=args.preprocess_num_jobs)
                 metrics_table = [[k, v] for k, v in metrics.items()]
                 print(tabulate(metrics_table, headers=["Metric", "Value"], tablefmt="pretty"))
 
@@ -484,7 +484,7 @@ def entrypoint(args):
             df.to_csv(os.path.join(output_dir, f'generated_smiles_{seed}.csv'), index=False)
 
             # compute metrics
-            metrics = get_spec_metrics(generated_smiles, n_jobs=cfg.eval.preprocess_num_jobs)
+            metrics = get_spec_metrics(generated_smiles, n_jobs=args.preprocess_num_jobs)
             metrics_table = [[k, v] for k, v in metrics.items()]
             print(tabulate(metrics_table, headers=["Metric", "Value"], tablefmt="pretty"))
 
