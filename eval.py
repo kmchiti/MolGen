@@ -383,7 +383,7 @@ def entrypoint(args):
             generated_smiles = generate_smiles_FA(
                 model=model,
                 tokenizer=datamodule.tokenizer,
-                n_samples=args.n_samples,
+                n_samples=args.num_samples,
                 num_return_sequences=args.batch_size,
                 prompt=args.prompt,
                 temperature=args.temperature,
@@ -396,7 +396,7 @@ def entrypoint(args):
             generated_smiles = generate_smiles_HF(
                 model=model,
                 tokenizer=datamodule.tokenizer,
-                n_samples=args.n_samples,
+                n_samples=args.num_samples,
                 num_return_sequences=args.batch_size,
                 prompt=args.prompt,
                 temperature=args.temperature,
