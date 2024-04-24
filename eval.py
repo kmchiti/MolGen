@@ -9,6 +9,7 @@ import torch
 import os
 from multiprocessing import Pool
 from typing import List, Tuple
+from hydra import compose, initialize
 from trainer import MyHFTrainer, MyTrainingArguments
 from callbacks import WandbCallback
 from fcd_torch import FCD as FCDMetric
@@ -34,6 +35,8 @@ from tabulate import tabulate
 from transformers import GPT2LMHeadModel, PreTrainedTokenizerFast, LlamaForCausalLM, LlamaConfig
 from tqdm import tqdm
 import copy
+
+MOLECULAR_PERFORMANCE_RESULT_PATH = './molecular_performance_MOSES.csv'
 
 def filter_tokens_after_eos(sequences, eos_id):
     output = copy.deepcopy(sequences)
@@ -238,39 +241,104 @@ def get_all_metrics(
         pool.join()  # type: ignore
     return metrics
 
+def get_spec_metrics(
+        gen,
+        n_jobs=1,
+        device="cpu",
+        batch_size=512,
+        pool=None,
+        test=None,
+        test_scaffolds=None,
+        ptest=None,
+        ptest_scaffolds=None,
+        train=None,
+):
+    if test is None:
+        if ptest is not None:
+            raise ValueError("You cannot specify custom test " "statistics for default test set")
+        test = get_dataset("test")
+        ptest = get_statistics("test")
+
+    if test_scaffolds is None:
+        if ptest_scaffolds is not None:
+            raise ValueError(
+                "You cannot specify custom scaffold test "
+                "statistics for default scaffold test set"
+            )
+
+    if train is None:
+        train = get_dataset("train")
+
+    disable_rdkit_log()
+    metrics = {}
+    close_pool = False
+    if pool is None:
+        if n_jobs != 1:
+            pool = Pool(n_jobs)
+            close_pool = True
+        else:
+            pool = 1
+    metrics["valid"] = fraction_valid(gen, n_jobs=pool)  # type: ignore
+
+    gen = remove_invalid(gen, canonize=True)
+    metrics[f"unique@{1000}"] = fraction_unique(gen, 1000, pool)  # type: ignore
+
+    if ptest is None:
+        ptest = compute_intermediate_statistics(
+            test, n_jobs=n_jobs, device=device, batch_size=batch_size, pool=pool
+        )
+    mols = mapper(pool)(get_mol, gen)
+    kwargs = {"n_jobs": pool, "device": device, "batch_size": batch_size}
+    kwargs_fcd = {'n_jobs': n_jobs, 'device': device, 'batch_size': batch_size}
+    metrics['FCD/Test'] = FCDMetric(**kwargs_fcd)(gen=gen, pref=ptest['FCD'])
+    metrics["SNN/Test"] = SNNMetric(**kwargs)(gen=mols, pref=ptest["SNN"])
+    metrics["Frag/Test"] = FragMetric(**kwargs)(gen=mols, pref=ptest["Frag"])
+    metrics["Scaf/Test"] = ScafMetric(**kwargs)(gen=mols, pref=ptest["Scaf"])
+    metrics["IntDiv"] = internal_diversity(mols, pool, device=device)  # type: ignore
+
+    if train is not None:
+        metrics["Novelty"] = novelty(mols, train, pool)  # type: ignore
+    if close_pool:
+        pool.close()  # type: ignore
+        pool.join()  # type: ignore
+    return metrics
+
 
 @hydra.main(version_base=None, config_path="configs", config_name="config_eval")
 def entrypoint(cfg: DictConfig):
     # Initialize setup
-    set_seed(cfg.seed)
-    exp_name = creat_unique_experiment_name(cfg)
-    output_dir = os.path.join(cfg.save_path, exp_name)
+    with initialize(version_base=None, config_path="configs"):
+        cfg_main = compose(config_name="train_moses_llama")
+
+    # Initialize setup
+    set_seed(cfg_main.seed)
+    exp_name = creat_unique_experiment_name(cfg_main)
+    output_dir = os.path.join(cfg_main.save_path, exp_name)
     os.makedirs(output_dir, exist_ok=True)
 
     # Initialize DataModule
-    datamodule = MolGenDataModule(**cfg.dataset)
+    datamodule = MolGenDataModule(**cfg_main.dataset)
 
-    # Load model
-    if cfg.model.model_name_or_path == 'gpt2_flash_atten':
-        model = GPT2MolGen_flash_atten(**cfg.model)
-    elif cfg.model.model_name_or_path in ['llama_small', 'llama_small_HF']:
-        model_cfg = LlamaConfig(**cfg.model)
+    # Initialize model
+    if cfg_main.model.model_name_or_path == 'gpt2_flash_atten':
+        model = GPT2MolGen_flash_atten(**cfg_main.model, max_seq_length=datamodule.max_seq_length,
+                                       vocab_size=datamodule.tokenizer.vocab_size)
+    elif cfg_main.model.model_name_or_path in ['llama_small', 'llama_small_HF']:
+        model_cfg = LlamaConfig(**cfg_main.model, n_ctx=datamodule.max_seq_length,
+                                vocab_size=datamodule.tokenizer.vocab_size)
         model = LlamaForCausalLM(model_cfg)
-    elif cfg.model.model_name_or_path == 'llama_small_FA':
-        model = Llama_small_flash_atten(**cfg.model)
+    elif cfg_main.model.model_name_or_path == 'llama_small_FA':
+        model = Llama_small_flash_atten(**cfg_main.model, max_seq_length=datamodule.max_seq_length,
+                                        vocab_size=datamodule.tokenizer.vocab_size)
+    elif cfg_main.model.model_name_or_path == 'gpt2':
+        model = GPT2MolGen(**cfg_main.model, max_seq_length=datamodule.max_seq_length,
+                           vocab_size=datamodule.tokenizer.vocab_size)
     else:
-        model = GPT2MolGen(**cfg.model)
-    # checkpoint = torch.load(os.path.join(output_dir, 'pytorch_model.bin'), map_location=torch.device('cpu'))
-    # model.load_state_dict(checkpoint)
-    # model = model.to(dtype=torch.bfloat16, device='cuda')
+        raise NotImplementedError
 
     # Initialize trainer
-    if cfg.wandb_logs:
-        wandb_callback = [WandbCallback(model=model, entity=cfg.wandb.entity, project=cfg.wandb.project,
-                                        name=exp_name, config=OmegaConf.to_container(cfg), tags=cfg.wandb.tags)]
-    else:
-        wandb_callback = None
-    train_args = MyTrainingArguments(data_seed=cfg.seed, seed=cfg.seed, output_dir=output_dir, **cfg.trainer)
+    wandb_callback = None
+    train_args = MyTrainingArguments(data_seed=cfg_main.seed, seed=cfg_main.seed, output_dir=output_dir, **cfg_main.trainer)
 
     trainer = MyHFTrainer(model=model,
                           args=train_args,
@@ -286,45 +354,53 @@ def entrypoint(cfg: DictConfig):
     model = trainer.accelerator.prepare_model(model, evaluation_mode=True)
 
     # Generate SMILES and calculate metrics
-    if isinstance(model, Llama_small_flash_atten) or isinstance(model, GPT2MolGen_flash_atten):
-        generated_smiles = generate_smiles_FA(
-            model=model,
-            tokenizer=datamodule.tokenizer,
-            n_samples=cfg.eval.n_samples,
-            num_return_sequences=cfg.eval.batch_size,
-            prompt=cfg.eval.prompt,
-            temperature=cfg.eval.temperature,
-            top_k=cfg.eval.top_k,
-            top_p=cfg.eval.top_p,
-            device=torch.device('cuda')
-        )
-    else:
-        generated_smiles = generate_smiles_HF(
-            model=model,
-            tokenizer=datamodule.tokenizer,
-            n_samples=cfg.eval.n_samples,
-            num_return_sequences=cfg.eval.batch_size,
-            prompt=cfg.eval.prompt,
-            temperature=cfg.eval.temperature,
-            top_k=cfg.eval.top_k,
-            top_p=cfg.eval.top_p,
-            device=torch.device('cuda')
-        )
-    metrics = get_all_metrics(generated_smiles, n_jobs=cfg.eval.preprocess_num_jobs)
+    model.eval()
+    for seed in cfg.seeds:
+        print(f" ============= start generate for seed={seed} =============")
+        set_seed(seed)
+        if isinstance(model, Llama_small_flash_atten) or isinstance(model, GPT2MolGen_flash_atten):
+            generated_smiles = generate_smiles_FA(
+                model=model,
+                tokenizer=datamodule.tokenizer,
+                n_samples=cfg_main.eval.n_samples,
+                num_return_sequences=cfg_main.eval.batch_size,
+                prompt=cfg_main.eval.prompt,
+                temperature=cfg_main.eval.temperature,
+                top_k=cfg_main.eval.top_k,
+                top_p=cfg_main.eval.top_p,
+                device=torch.device('cuda')
+            )
+        else:
+            generated_smiles = generate_smiles_HF(
+                model=model,
+                tokenizer=datamodule.tokenizer,
+                n_samples=cfg_main.eval.n_samples,
+                num_return_sequences=cfg_main.eval.batch_size,
+                prompt=cfg_main.eval.prompt,
+                temperature=cfg_main.eval.temperature,
+                top_k=cfg_main.eval.top_k,
+                top_p=cfg_main.eval.top_p,
+                device=torch.device('cuda')
+            )
 
-    # Convert the dictionary to a list of lists
-    metrics_table = [[k, v] for k, v in metrics.items()]
-    print(tabulate(metrics_table, headers=["Metric", "Value"], tablefmt="pretty"))
+        # Save the SMILES to a CSV file
+        df = pd.DataFrame(generated_smiles, columns=["SMILES"])
+        df.to_csv(os.path.join(output_dir, f'generated_smiles_{seed}.csv'), index=False)
 
-    # Save the SMILES to a CSV file
-    df = pd.DataFrame(generated_smiles, columns=["SMILES"])
-    df.to_csv(os.path.join(output_dir, 'generated_smiles.csv'), index=False)
+        # compute metrics
+        metrics = get_spec_metrics(generated_smiles, n_jobs=cfg_main.eval.preprocess_num_jobs)
+        metrics_table = [[k, v] for k, v in metrics.items()]
+        print(tabulate(metrics_table, headers=["Metric", "Value"], tablefmt="pretty"))
 
-    # Convert the list of lists to a DataFrame
-    df = pd.DataFrame(metrics_table, columns=["Metric", "Value"])
-    df.to_csv(os.path.join(output_dir, 'metrics.csv'), index=False)
-    if cfg.wandb_logs:
-        wandb.log({"evaluation_metrics": wandb.Table(dataframe=df)})
+        save_path = os.path.join(output_dir, MOLECULAR_PERFORMANCE_RESULT_PATH)
+        if os.path.exists(save_path):
+            result = pd.read_csv(save_path, index_col=0)
+        else:
+            result = pd.DataFrame()
+        df_new_row = pd.DataFrame(metrics, index=[])
+        result = pd.concat([result, df_new_row])
+        result.to_csv(save_path)
+
 
 
 if __name__ == "__main__":

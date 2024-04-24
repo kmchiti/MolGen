@@ -1,22 +1,12 @@
 # The Defaults List is a list in an input config that instructs Hydra how to build the output config.
-defaults:
-  - _self_
-  - dataset: pubchem_smiles
-  - model: llama-small_flash_attention
-  - trainer: hf_trainer_FA
-  - eval: basic
 
-seed: 42
-save_path: './save'
+config_name: train_moses_llama
+seeds: [42, 1335, 2024]
 
-hydra:
-  run:
-    dir: outputs/${now:%Y-%m-%d-%H-%M-%S}/hydra
-
-wandb_logs: true
+wandb_logs: false
 wandb:
   name: null
-  project: Molecule Language Model
-  entity: molgpt
+  project: small-molecule-generation
+  entity: drug-discovery
   tags: []
   mode: online
