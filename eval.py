@@ -42,6 +42,8 @@ import copy
 
 MOLECULAR_PERFORMANCE_RESULT_PATH = './molecular_performance_MOSES.csv'
 PYTDC_RESULT_PATH = 'PyTDC_results'
+
+
 def args_parser():
     parser = argparse.ArgumentParser(
         description='Molecules Generation',
@@ -57,9 +59,14 @@ def args_parser():
     parser.add_argument('--temperature', default=1.0, type=float, help='temperature')
     parser.add_argument('--prompt', default="", type=str, help='input prompt to generate')
     parser.add_argument('--preprocess_num_jobs', default=6, type=int, help='preprocess_num_jobs')
-    parser.add_argument('--evaluate_on_checkpoints', dest='evaluate_on_checkpoints', action='store_true', help='evaluate model on all checkpoints')
+    parser.add_argument('--evaluate_on_checkpoints', dest='evaluate_on_checkpoints', action='store_true',
+                        help='evaluate model on all checkpoints')
+    parser.add_argument('--tdc', dest='tdc', action='store_true', help='compute metrics for TDC benchmark')
+    parser.add_argument('--moses', dest='moses', action='store_true', help='compute metrics for MOSES benchmark')
+    parser.add_argument('--generate', dest='generate', action='store_true', help='generate molecules and save as csv')
     args = parser.parse_args()
     return args
+
 
 def filter_tokens_after_eos(sequences, eos_id):
     output = copy.deepcopy(sequences)
@@ -68,8 +75,9 @@ def filter_tokens_after_eos(sequences, eos_id):
         eos_position = (row == eos_id).nonzero()
         if eos_position.numel() > 0:
             eos_position = eos_position[0, 0].item()  # Get the index of the first occurrence
-            output[i, eos_position+1:] = eos_id
+            output[i, eos_position + 1:] = eos_id
     return output
+
 
 def generate_smiles_FA(
         model,
@@ -268,6 +276,7 @@ def get_all_metrics(
         pool.join()  # type: ignore
     return metrics
 
+
 def get_spec_metrics(
         gen,
         n_jobs=1,
@@ -331,33 +340,61 @@ def get_spec_metrics(
     return metrics
 
 
-def evaluate_PyTDC_tasks(generated_smiles):
-    target_names = ['drd2', 'qed',
-                  'celecoxib_rediscovery', 'troglitazone_rediscovery', 'thiothixene_rediscovery',
-                  'albuterol_similarity', 'mestranol_similarity',
-                  'isomers_c7h8n2o2', 'isomers_c9h10n2o2pf2cl',
-                  'median1', 'median2',
-                  'mpo',
-                  'valsartan_smarts'] #'gsk3b' 'jnk3',
+def evaluate_PyTDC_tasks(generated_smiles,
+                         target_names=None):
+    if target_names is None:
+        target_names = ['qed', 'logp', 'drd2', 'gsk3b', 'jnk3', 'sa',
+                        'albuterol_similarity', 'aripiprazole_similarity', 'mestranol_similarity',
+                        'celecoxib_rediscovery', 'troglitazone_rediscovery', 'thiothixene_rediscovery',
+                        'isomers_c7h8n2o2', 'isomers_c9h10n2o2pf2cl',
+                        'mpo',
+                        'median1', 'median2',
+                        'valsartan_smarts', 'deco_hop', 'scaffold_hop']
+
     def _update_metrics(dict, new_dict):
         for key, value in new_dict.items():
             if key in dict:
                 dict[key].append(value)
             else:
                 dict[key] = [value]
+
     metrics = {}
-    for target_name in target_names:
-        result = {}
-        orcal_function = Oracle(name=target_name)
-        output = orcal_function(generated_smiles)
-        if isinstance(output, dict):
-            for k,v in output.items():
-                result[f'{k}_{target_name}'] = v
-        else:
-            result[target_name] = output
-        _update_metrics(metrics, result)
-    metrics = {k:v[0] for k,v in metrics.items()}
+    with tqdm(total=len(target_names), desc="Evaluating targets") as pbar:
+        for target_name in target_names:
+            pbar.set_description(f"Evaluating: {target_name}")
+            result = {}
+            orcal_function = Oracle(name=target_name)
+            output = orcal_function(generated_smiles)
+            if isinstance(output, dict):
+                for k, v in output.items():
+                    result[f'{k}_{target_name}'] = v
+            else:
+                result[target_name] = output
+            _update_metrics(metrics, result)
+            pbar.update(1)
+    metrics = {k: v[0] for k, v in metrics.items()}
     return metrics
+
+
+def evaluate_and_save_PyTDC_tasks(generated_smiles, output_dir, seed):
+    if len(generated_smiles)>10000:
+        generated_smiles = generated_smiles[:10000]
+    PyTDC_result = evaluate_PyTDC_tasks(generated_smiles)
+    # filter valid ones
+    min_len = min([len(v) for v in PyTDC_result.values()])
+    PyTDC_result = {k: v[:min_len] for k, v in PyTDC_result.items()}
+    df = pd.DataFrame(PyTDC_result)
+    df.to_csv(os.path.join(output_dir, PYTDC_RESULT_PATH + f'_{seed}' + '.csv'), index=False)
+    top100_df = pd.DataFrame({col: df[col].nlargest(100).values for col in df})
+    top10_df = top100_df.head(10)
+    top1_df = top100_df.head(1)
+    top100_df.loc['mean'] = top100_df.mean()
+    top10_df.loc['mean'] = top10_df.mean()
+    top1_df.loc['mean'] = top1_df.mean()
+    top100_df.to_csv(os.path.join(output_dir, PYTDC_RESULT_PATH + f'_{seed}' + '_top100.csv'), index=False)
+    top10_df.to_csv(os.path.join(output_dir, PYTDC_RESULT_PATH + f'_{seed}' + '_top10.csv'), index=False)
+    top1_df.to_csv(os.path.join(output_dir, PYTDC_RESULT_PATH + f'_{seed}' + '_top1.csv'), index=False)
+
 
 def entrypoint(args):
     # Initialize setup
@@ -421,6 +458,82 @@ def entrypoint(args):
             for seed in args.seeds:
                 print(f" ============= start generate for seed={seed} =============")
                 set_seed(seed)
+                if args.generate:
+                    if isinstance(model, Llama_small_flash_atten) or isinstance(model, GPT2MolGen_flash_atten):
+                        generated_smiles = generate_smiles_FA(
+                            model=model,
+                            tokenizer=datamodule.tokenizer,
+                            n_samples=args.num_samples,
+                            num_return_sequences=args.batch_size,
+                            prompt=args.prompt,
+                            temperature=args.temperature,
+                            top_k=args.top_k,
+                            top_p=args.top_p,
+                            max_length=datamodule.max_seq_length,
+                            device=torch.device('cuda')
+                        )
+                    else:
+                        generated_smiles = generate_smiles_HF(
+                            model=model,
+                            tokenizer=datamodule.tokenizer,
+                            n_samples=args.num_samples,
+                            num_return_sequences=args.batch_size,
+                            prompt=args.prompt,
+                            temperature=args.temperature,
+                            top_k=args.top_k,
+                            top_p=args.top_p,
+                            max_length=datamodule.max_seq_length,
+                            device=torch.device('cuda')
+                        )
+                    # Save the SMILES to a CSV file
+                    df = pd.DataFrame(generated_smiles, columns=["SMILES"])
+                    df.to_csv(os.path.join(checkpoint_path, f'generated_smiles_{seed}.csv'), index=False)
+                else:
+                    # Read generated SMILES
+                    df = pd.read_csv(os.path.join(checkpoint_path, f'generated_smiles_{seed}.csv'))
+                    generated_smiles = list(df['SMILES'])
+
+                # compute PyTDC metrics
+                print(f" ============= compute metrics for PyTDC benchmark =============")
+                if args.tdc:
+                    evaluate_and_save_PyTDC_tasks(generated_smiles, checkpoint_path, seed)
+
+                # compute MOSES metrics
+                print(f" ============= compute metrics for MOSES benchmark =============")
+                if args.moses:
+                    metrics = get_spec_metrics(generated_smiles, n_jobs=args.preprocess_num_jobs)
+                    metrics_table = [[k, v] for k, v in metrics.items()]
+                    print(tabulate(metrics_table, headers=["Metric", "Value"], tablefmt="pretty"))
+
+                    save_path = os.path.join(checkpoint_path, MOLECULAR_PERFORMANCE_RESULT_PATH)
+                    if os.path.exists(save_path):
+                        result = pd.read_csv(save_path, index_col=0)
+                    else:
+                        result = pd.DataFrame()
+                    df_new_row = pd.DataFrame(metrics, index=[seed])
+                    result = pd.concat([result, df_new_row])
+                    result.to_csv(save_path)
+
+            if args.moses:
+                save_path = os.path.join(checkpoint_path, MOLECULAR_PERFORMANCE_RESULT_PATH)
+                result = pd.read_csv(save_path, index_col=0)
+                mean_values = result.mean()
+                std_values = result.std()
+                result.loc['mean'] = mean_values
+                result.loc['std'] = std_values
+                result.to_csv(save_path)
+
+    else:
+        print(f"load checkpoint from: {output_dir}")
+        trainer._load_from_checkpoint(output_dir)
+        model = trainer.accelerator.prepare_model(model, evaluation_mode=True)
+
+        # Generate SMILES and calculate metrics
+        model.eval()
+        for seed in args.seeds:
+            print(f" ============= start generate for seed={seed} =============")
+            set_seed(seed)
+            if args.generate:
                 if isinstance(model, Llama_small_flash_atten) or isinstance(model, GPT2MolGen_flash_atten):
                     generated_smiles = generate_smiles_FA(
                         model=model,
@@ -447,17 +560,27 @@ def entrypoint(args):
                         max_length=datamodule.max_seq_length,
                         device=torch.device('cuda')
                     )
-
                 # Save the SMILES to a CSV file
                 df = pd.DataFrame(generated_smiles, columns=["SMILES"])
-                df.to_csv(os.path.join(checkpoint_path, f'generated_smiles_{seed}.csv'), index=False)
+                df.to_csv(os.path.join(output_dir, f'generated_smiles_{seed}.csv'), index=False)
+            else:
+                # Read generated SMILES
+                df = pd.read_csv(os.path.join(output_dir, f'generated_smiles_{seed}.csv'))
+                generated_smiles = list(df['SMILES'])
 
-                # compute metrics
+            # compute PyTDC metrics
+            print(f" ============= compute metrics for PyTDC benchmark =============")
+            if args.tdc:
+                evaluate_and_save_PyTDC_tasks(generated_smiles, output_dir, seed)
+
+            # compute MOSES metrics
+            print(f" ============= compute metrics for MOSES benchmark =============")
+            if args.moses:
                 metrics = get_spec_metrics(generated_smiles, n_jobs=args.preprocess_num_jobs)
                 metrics_table = [[k, v] for k, v in metrics.items()]
                 print(tabulate(metrics_table, headers=["Metric", "Value"], tablefmt="pretty"))
 
-                save_path = os.path.join(checkpoint_path, MOLECULAR_PERFORMANCE_RESULT_PATH)
+                save_path = os.path.join(output_dir, MOLECULAR_PERFORMANCE_RESULT_PATH)
                 if os.path.exists(save_path):
                     result = pd.read_csv(save_path, index_col=0)
                 else:
@@ -466,87 +589,14 @@ def entrypoint(args):
                 result = pd.concat([result, df_new_row])
                 result.to_csv(save_path)
 
+        if args.moses:
+            save_path = os.path.join(output_dir, MOLECULAR_PERFORMANCE_RESULT_PATH)
+            result = pd.read_csv(save_path, index_col=0)
             mean_values = result.mean()
             std_values = result.std()
             result.loc['mean'] = mean_values
             result.loc['std'] = std_values
             result.to_csv(save_path)
-
-    else:
-        print(f"load checkpoint from: {output_dir}")
-        trainer._load_from_checkpoint(output_dir)
-        model = trainer.accelerator.prepare_model(model, evaluation_mode=True)
-
-        # Generate SMILES and calculate metrics
-        model.eval()
-        for seed in args.seeds:
-            print(f" ============= start generate for seed={seed} =============")
-            set_seed(seed)
-            if isinstance(model, Llama_small_flash_atten) or isinstance(model, GPT2MolGen_flash_atten):
-                generated_smiles = generate_smiles_FA(
-                    model=model,
-                    tokenizer=datamodule.tokenizer,
-                    n_samples=args.num_samples,
-                    num_return_sequences=args.batch_size,
-                    prompt=args.prompt,
-                    temperature=args.temperature,
-                    top_k=args.top_k,
-                    top_p=args.top_p,
-                    max_length=datamodule.max_seq_length,
-                    device=torch.device('cuda')
-                )
-            else:
-                generated_smiles = generate_smiles_HF(
-                    model=model,
-                    tokenizer=datamodule.tokenizer,
-                    n_samples=args.num_samples,
-                    num_return_sequences=args.batch_size,
-                    prompt=args.prompt,
-                    temperature=args.temperature,
-                    top_k=args.top_k,
-                    top_p=args.top_p,
-                    max_length=datamodule.max_seq_length,
-                    device=torch.device('cuda')
-                )
-
-            # Save the SMILES to a CSV file
-            df = pd.DataFrame(generated_smiles, columns=["SMILES"])
-            df.to_csv(os.path.join(output_dir, f'generated_smiles_{seed}.csv'), index=False)
-
-            # compute PyTDC metrics
-            PyTDC_result = evaluate_PyTDC_tasks(generated_smiles)
-            df = pd.DataFrame(PyTDC_result)
-            df.to_csv(os.path.join(output_dir, PYTDC_RESULT_PATH+'.csv'), index=False)
-            top100_df = pd.DataFrame({col: df[col].nlargest(100).values for col in df})
-            top10_df = top100_df.head(10)
-            top1_df = top100_df.head(1)
-            top100_df.loc['mean'] = top100_df.mean()
-            top10_df.loc['mean'] = top10_df.mean()
-            top1_df.loc['mean'] = top1_df.mean()
-            top100_df.to_csv(os.path.join(output_dir, PYTDC_RESULT_PATH+'_top100.csv'), index=False)
-            top10_df.to_csv(os.path.join(output_dir, PYTDC_RESULT_PATH + '_top10.csv'), index=False)
-            top1_df.to_csv(os.path.join(output_dir, PYTDC_RESULT_PATH + '_top1.csv'), index=False)
-
-            # compute MOSES metrics
-            metrics = get_spec_metrics(generated_smiles, n_jobs=args.preprocess_num_jobs)
-            metrics_table = [[k, v] for k, v in metrics.items()]
-            print(tabulate(metrics_table, headers=["Metric", "Value"], tablefmt="pretty"))
-
-            save_path = os.path.join(output_dir, MOLECULAR_PERFORMANCE_RESULT_PATH)
-            if os.path.exists(save_path):
-                result = pd.read_csv(save_path, index_col=0)
-            else:
-                result = pd.DataFrame()
-            df_new_row = pd.DataFrame(metrics, index=[seed])
-            result = pd.concat([result, df_new_row])
-            result.to_csv(save_path)
-
-
-        mean_values = result.mean()
-        std_values = result.std()
-        result.loc['mean'] = mean_values
-        result.loc['std'] = std_values
-        result.to_csv(save_path)
 
 
 if __name__ == "__main__":
