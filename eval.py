@@ -456,9 +456,9 @@ def entrypoint(args):
             # Generate SMILES and calculate metrics
             model.eval()
             for seed in args.seeds:
-                print(f" ============= start generate for seed={seed} =============")
                 set_seed(seed)
                 if args.generate:
+                    print(f" ============= start generate for seed={seed} =============")
                     if isinstance(model, Llama_small_flash_atten) or isinstance(model, GPT2MolGen_flash_atten):
                         generated_smiles = generate_smiles_FA(
                             model=model,
@@ -489,18 +489,19 @@ def entrypoint(args):
                     df = pd.DataFrame(generated_smiles, columns=["SMILES"])
                     df.to_csv(os.path.join(checkpoint_path, f'generated_smiles_{seed}.csv'), index=False)
                 else:
+                    print(f" ============= read generated for seed={seed} =============")
                     # Read generated SMILES
                     df = pd.read_csv(os.path.join(checkpoint_path, f'generated_smiles_{seed}.csv'))
                     generated_smiles = list(df['SMILES'])
 
                 # compute PyTDC metrics
-                print(f" ============= compute metrics for PyTDC benchmark =============")
                 if args.tdc:
+                    print(f" ============= compute metrics for PyTDC benchmark =============")
                     evaluate_and_save_PyTDC_tasks(generated_smiles, checkpoint_path, seed)
 
                 # compute MOSES metrics
-                print(f" ============= compute metrics for MOSES benchmark =============")
                 if args.moses:
+                    print(f" ============= compute metrics for MOSES benchmark =============")
                     metrics = get_spec_metrics(generated_smiles, n_jobs=args.preprocess_num_jobs)
                     metrics_table = [[k, v] for k, v in metrics.items()]
                     print(tabulate(metrics_table, headers=["Metric", "Value"], tablefmt="pretty"))
@@ -531,9 +532,9 @@ def entrypoint(args):
         # Generate SMILES and calculate metrics
         model.eval()
         for seed in args.seeds:
-            print(f" ============= start generate for seed={seed} =============")
             set_seed(seed)
             if args.generate:
+                print(f" ============= start generate for seed={seed} =============")
                 if isinstance(model, Llama_small_flash_atten) or isinstance(model, GPT2MolGen_flash_atten):
                     generated_smiles = generate_smiles_FA(
                         model=model,
@@ -565,17 +566,18 @@ def entrypoint(args):
                 df.to_csv(os.path.join(output_dir, f'generated_smiles_{seed}.csv'), index=False)
             else:
                 # Read generated SMILES
+                print(f" ============= read generated for seed={seed} =============")
                 df = pd.read_csv(os.path.join(output_dir, f'generated_smiles_{seed}.csv'))
                 generated_smiles = list(df['SMILES'])
 
             # compute PyTDC metrics
-            print(f" ============= compute metrics for PyTDC benchmark =============")
             if args.tdc:
+                print(f" ============= compute metrics for PyTDC benchmark =============")
                 evaluate_and_save_PyTDC_tasks(generated_smiles, output_dir, seed)
 
             # compute MOSES metrics
-            print(f" ============= compute metrics for MOSES benchmark =============")
             if args.moses:
+                print(f" ============= compute metrics for MOSES benchmark =============")
                 metrics = get_spec_metrics(generated_smiles, n_jobs=args.preprocess_num_jobs)
                 metrics_table = [[k, v] for k, v in metrics.items()]
                 print(tabulate(metrics_table, headers=["Metric", "Value"], tablefmt="pretty"))
