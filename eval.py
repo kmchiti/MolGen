@@ -5,10 +5,12 @@ from dataset import MolGenDataModule
 from models import GPT2MolGen, GPT2MolGen_flash_atten, Llama_small_flash_atten
 from utils import creat_unique_experiment_name, is_world_process_zero
 import wandb
+import numpy as np
 import re
 import torch
 import os
 from multiprocessing import Pool
+from datasets import load_dataset
 from typing import List, Tuple
 from hydra import compose, initialize
 from trainer import MyHFTrainer, MyTrainingArguments
@@ -41,6 +43,7 @@ from tqdm import tqdm
 import copy
 
 MOLECULAR_PERFORMANCE_RESULT_PATH = './molecular_performance_MOSES.csv'
+MOLECULAR_PROPERTY_RESULT_PATH = './molecular_property.csv'
 PYTDC_RESULT_PATH = 'PyTDC_results'
 
 
@@ -64,6 +67,7 @@ def args_parser():
     parser.add_argument('--tdc', dest='tdc', action='store_true', help='compute metrics for TDC benchmark')
     parser.add_argument('--moses', dest='moses', action='store_true', help='compute metrics for MOSES benchmark')
     parser.add_argument('--generate', dest='generate', action='store_true', help='generate molecules and save as csv')
+    parser.add_argument('--prompt_data_path', default=None, type=str, help='path to data for superstructure as a input prompt')
     args = parser.parse_args()
     return args
 
@@ -340,6 +344,33 @@ def get_spec_metrics(
     return metrics
 
 
+def get_molecule_property_metrics(
+        gen,
+        n_jobs=1,
+):
+    disable_rdkit_log()
+    metrics = {}
+    close_pool = False
+    if n_jobs != 1:
+        pool = Pool(n_jobs)
+        close_pool = True
+    else:
+        pool = 1
+    metrics["valid"] = fraction_valid(gen, n_jobs=pool)  # type: ignore
+
+    gen = remove_invalid(gen, canonize=True)
+    orcale_function = Oracle(name='sa')
+    metrics[f"unique@{1000}"] = fraction_unique(gen, 1000, pool)  # type: ignore
+    mols = mapper(pool)(get_mol, gen)
+    metrics["IntDiv"] = internal_diversity(mols, pool, device='cpu')  # type: ignore
+    output = orcale_function(gen)
+    metrics["SA"] = np.mean(output)
+
+    if close_pool:
+        pool.close()  # type: ignore
+        pool.join()  # type: ignore
+    return metrics
+
 def evaluate_PyTDC_tasks(generated_smiles,
                          target_names=None):
     if target_names is None:
@@ -564,6 +595,59 @@ def entrypoint(args):
                 # Save the SMILES to a CSV file
                 df = pd.DataFrame(generated_smiles, columns=["SMILES"])
                 df.to_csv(os.path.join(output_dir, f'generated_smiles_{seed}.csv'), index=False)
+                # Save the SMILES to a CSV file
+                df = pd.DataFrame(generated_smiles, columns=["SMILES"])
+                df.to_csv(os.path.join(output_dir, f'generated_smiles_{seed}.csv'), index=False)
+            elif args.prompt_data_path is not None:
+                print(f" ============= start generate for {args.prompt_data_path} for seed={seed} =============")
+                raw_data = load_dataset(args.prompt_data_path)
+                generated_smiles = []
+                for prompt in raw_data['train']['superstructure']:
+                    if isinstance(model, Llama_small_flash_atten) or isinstance(model, GPT2MolGen_flash_atten):
+                        generated_smiles += generate_smiles_FA(
+                            model=model,
+                            tokenizer=datamodule.tokenizer,
+                            n_samples=args.num_samples,
+                            num_return_sequences=args.batch_size,
+                            prompt=prompt,
+                            temperature=args.temperature,
+                            top_k=args.top_k,
+                            top_p=args.top_p,
+                            max_length=datamodule.max_seq_length,
+                            device=torch.device('cuda')
+                        )
+                    else:
+                        generated_smiles += generate_smiles_HF(
+                            model=model,
+                            tokenizer=datamodule.tokenizer,
+                            n_samples=args.num_samples,
+                            num_return_sequences=args.batch_size,
+                            prompt=prompt,
+                            temperature=args.temperature,
+                            top_k=args.top_k,
+                            top_p=args.top_p,
+                            max_length=datamodule.max_seq_length,
+                            device=torch.device('cuda')
+                        )
+                # Save the SMILES to a CSV file
+                df = pd.DataFrame(generated_smiles, columns=["SMILES"])
+                if 'MolGen' in args.prompt_data_path:
+                    prompt_data_path = args.prompt_data_path.split('MolGen/')[1]
+                else:
+                    prompt_data_path = args.prompt_data_path.replace('/', '_')
+                df.to_csv(os.path.join(output_dir, f'generated_smiles_{prompt_data_path}_{seed}.csv'), index=False)
+
+                metrics = get_molecule_property_metrics(generated_smiles, args.preprocess_num_jobs)
+                save_path = os.path.join(output_dir, MOLECULAR_PROPERTY_RESULT_PATH)
+                if os.path.exists(save_path):
+                    result = pd.read_csv(save_path, index_col=0)
+                else:
+                    result = pd.DataFrame()
+                df_new_row = pd.DataFrame(metrics, index=[seed])
+                result = pd.concat([result, df_new_row])
+                result.to_csv(save_path)
+
+
             else:
                 # Read generated SMILES
                 print(f" ============= read generated for seed={seed} =============")
@@ -593,6 +677,15 @@ def entrypoint(args):
 
         if args.moses:
             save_path = os.path.join(output_dir, MOLECULAR_PERFORMANCE_RESULT_PATH)
+            result = pd.read_csv(save_path, index_col=0)
+            mean_values = result.mean()
+            std_values = result.std()
+            result.loc['mean'] = mean_values
+            result.loc['std'] = std_values
+            result.to_csv(save_path)
+
+        if args.prompt_data_path is not None:
+            save_path = os.path.join(output_dir, MOLECULAR_PROPERTY_RESULT_PATH)
             result = pd.read_csv(save_path, index_col=0)
             mean_values = result.mean()
             std_values = result.std()
