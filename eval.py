@@ -67,7 +67,8 @@ def args_parser():
     parser.add_argument('--tdc', dest='tdc', action='store_true', help='compute metrics for TDC benchmark')
     parser.add_argument('--moses', dest='moses', action='store_true', help='compute metrics for MOSES benchmark')
     parser.add_argument('--generate', dest='generate', action='store_true', help='generate molecules and save as csv')
-    parser.add_argument('--prompt_data_path', default=None, type=str, help='path to data for superstructure as a input prompt')
+    parser.add_argument('--prompt_data_path', default=None, type=str,
+                        help='path to data for superstructure as a input prompt')
     args = parser.parse_args()
     return args
 
@@ -371,6 +372,7 @@ def get_molecule_property_metrics(
         pool.join()  # type: ignore
     return metrics
 
+
 def evaluate_PyTDC_tasks(generated_smiles,
                          target_names=None):
     if target_names is None:
@@ -408,7 +410,7 @@ def evaluate_PyTDC_tasks(generated_smiles,
 
 
 def evaluate_and_save_PyTDC_tasks(generated_smiles, output_dir, seed):
-    if len(generated_smiles)>10000:
+    if len(generated_smiles) > 10000:
         generated_smiles = generated_smiles[:10000]
     PyTDC_result = evaluate_PyTDC_tasks(generated_smiles)
     # filter valid ones
@@ -519,6 +521,56 @@ def entrypoint(args):
                     # Save the SMILES to a CSV file
                     df = pd.DataFrame(generated_smiles, columns=["SMILES"])
                     df.to_csv(os.path.join(checkpoint_path, f'generated_smiles_{seed}.csv'), index=False)
+
+                elif args.prompt_data_path is not None:
+                    print(f" ============= start generate for {args.prompt_data_path} for seed={seed} =============")
+                    raw_data = load_dataset(args.prompt_data_path)
+                    generated_smiles = []
+                    for prompt in raw_data['train']['superstructure']:
+                        if isinstance(model, Llama_small_flash_atten) or isinstance(model, GPT2MolGen_flash_atten):
+                            generated_smiles += generate_smiles_FA(
+                                model=model,
+                                tokenizer=datamodule.tokenizer,
+                                n_samples=args.num_samples,
+                                num_return_sequences=args.batch_size,
+                                prompt=prompt,
+                                temperature=args.temperature,
+                                top_k=args.top_k,
+                                top_p=args.top_p,
+                                max_length=datamodule.max_seq_length,
+                                device=torch.device('cuda')
+                            )
+                        else:
+                            generated_smiles += generate_smiles_HF(
+                                model=model,
+                                tokenizer=datamodule.tokenizer,
+                                n_samples=args.num_samples,
+                                num_return_sequences=args.batch_size,
+                                prompt=prompt,
+                                temperature=args.temperature,
+                                top_k=args.top_k,
+                                top_p=args.top_p,
+                                max_length=datamodule.max_seq_length,
+                                device=torch.device('cuda')
+                            )
+                    # Save the SMILES to a CSV file
+                    df = pd.DataFrame(generated_smiles, columns=["SMILES"])
+                    if 'MolGen' in args.prompt_data_path:
+                        prompt_data_path = args.prompt_data_path.split('MolGen/')[1]
+                    else:
+                        prompt_data_path = args.prompt_data_path.replace('/', '_')
+                    df.to_csv(os.path.join(checkpoint_path, f'generated_smiles_{prompt_data_path}_{seed}.csv'), index=False)
+
+                    metrics = get_molecule_property_metrics(generated_smiles, args.preprocess_num_jobs)
+                    save_path = os.path.join(checkpoint_path, MOLECULAR_PROPERTY_RESULT_PATH)
+                    if os.path.exists(save_path):
+                        result = pd.read_csv(save_path, index_col=0)
+                    else:
+                        result = pd.DataFrame()
+                    df_new_row = pd.DataFrame(metrics, index=[seed])
+                    result = pd.concat([result, df_new_row])
+                    result.to_csv(save_path)
+
                 else:
                     print(f" ============= read generated for seed={seed} =============")
                     # Read generated SMILES
@@ -548,6 +600,15 @@ def entrypoint(args):
 
             if args.moses:
                 save_path = os.path.join(checkpoint_path, MOLECULAR_PERFORMANCE_RESULT_PATH)
+                result = pd.read_csv(save_path, index_col=0)
+                mean_values = result.mean()
+                std_values = result.std()
+                result.loc['mean'] = mean_values
+                result.loc['std'] = std_values
+                result.to_csv(save_path)
+
+            if args.prompt_data_path is not None:
+                save_path = os.path.join(checkpoint_path, MOLECULAR_PROPERTY_RESULT_PATH)
                 result = pd.read_csv(save_path, index_col=0)
                 mean_values = result.mean()
                 std_values = result.std()
@@ -646,7 +707,6 @@ def entrypoint(args):
                 df_new_row = pd.DataFrame(metrics, index=[seed])
                 result = pd.concat([result, df_new_row])
                 result.to_csv(save_path)
-
 
             else:
                 # Read generated SMILES
