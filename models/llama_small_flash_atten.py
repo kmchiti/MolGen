@@ -119,12 +119,12 @@ class Llama_small_flash_atten(GPTLMHeadModel, ABC):
             logits=lm_logits,
         )
 
-    def save_HF_model(self, config, tokenizer, output_dir: str, dataset_name: str = None, token=None):
+    def save_HF_model(self, config, tokenizer, max_seq_length, vocab_size, output_dir: str, dataset_name: str = None, token=None):
         state_dict = self.state_dict()
         state_dict = {key: value.cpu() for key, value in state_dict.items()}
         state_dict = inv_remap_state_dict_hf_llama(state_dict, self.config)
 
-        model_cfg = LlamaConfig(**config)
+        model_cfg = LlamaConfig(**config, max_seq_length=max_seq_length, vocab_size=vocab_size)
         model = LlamaForCausalLM(model_cfg)
         model.load_state_dict(state_dict)
         model.save_pretrained(output_dir)

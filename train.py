@@ -79,6 +79,7 @@ def entrypoint(cfg: DictConfig):
     if is_world_process_zero(train_args)and isinstance(model, GPTLMHeadModel):
         print('save remapped HF model to:', os.path.join(output_dir, 'HF'))
         model.save_HF_model(OmegaConf.to_container(cfg.model), datamodule.tokenizer,
+                            max_seq_length=datamodule.max_seq_length, vocab_size=datamodule.tokenizer.vocab_size,
                             output_dir=os.path.join(output_dir, 'HF'),
                             dataset_name=cfg.dataset['dataset_name'].replace("MolGen/", ""),
                             token=cfg.write_HF_token)
