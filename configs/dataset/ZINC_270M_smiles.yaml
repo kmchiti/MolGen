@@ -1,4 +1,4 @@
-dataset_name: "MolGen/ZINC_270M"
+dataset_name: "MolGen/ZINC_270M-raw"
 tokenizer_path: "./data/processed/training/tokenizers/BPE_pubchem_500.json"
 mol_type: "SMILES"
 overwrite_cache: false
