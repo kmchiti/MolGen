@@ -1,4 +1,4 @@
-dataset_name: "MolGen/ZINC_270M"
+dataset_name: "MolGen/ZINC_270M-raw"
 tokenizer_path: "./data/processed/training/tokenizers/atomwise_ZINC_270M_SMILES_30000.json"
 mol_type: "SMILES"
 overwrite_cache: false
