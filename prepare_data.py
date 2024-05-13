@@ -32,7 +32,7 @@ def set_plot_style(
     plt.rcParams['lines.linewidth'] = linewidth
 
 
-tokenize = False
+tokenize = True
 
 
 @hydra.main(version_base=None, config_path="configs/dataset", config_name="pubchem_smiles")
