@@ -63,7 +63,8 @@ def entrypoint(args):
 
     # Initialize setup
     exp_name = creat_unique_experiment_name(cfg)
-    output_dir = os.path.join(cfg.save_path, exp_name)
+    # output_dir = os.path.join(cfg.save_path, exp_name)
+    output_dir = './save/llama_small_FA_ZINC_270M_3d67f607_'
     os.makedirs(output_dir, exist_ok=True)
 
     # Initialize DataModule
@@ -146,13 +147,17 @@ def entrypoint(args):
 
             df = pd.DataFrame(gen_smiles, columns=["SMILES"])
             if args.task == 'qed':
-                pandarallel.initialize(shm_size_mb=60720, nb_workers=args.args.preprocess_num_jobs, progress_bar=True)
+                pandarallel.initialize(shm_size_mb=60720, nb_workers=args.preprocess_num_jobs, progress_bar=True)
                 df['qed'] = df['SMILES'].parallel_apply(get_qed)
                 filtered_df = df[df['qed'] > 0.9]
             elif args.task == 'logp':
-                pandarallel.initialize(shm_size_mb=60720, nb_workers=args.args.preprocess_num_jobs, progress_bar=True)
-                df['qed'] = df['SMILES'].parallel_apply(get_qed)
-                filtered_df = df[df['qed'] > 0.9]
+                pandarallel.initialize(shm_size_mb=60720, nb_workers=args.preprocess_num_jobs, progress_bar=True)
+                df['logP'] = df['SMILES'].parallel_apply(get_logp)
+                filtered_df = df[df['logP'] > 3.0]
+            elif args.task == 'SA':
+                pandarallel.initialize(shm_size_mb=60720, nb_workers=args.preprocess_num_jobs, progress_bar=True)
+                df['SA'] = df['SMILES'].parallel_apply(get_sa)
+                filtered_df = df[df['SA'] > 4.0]
             else:
                 raise NotImplementedError
 
