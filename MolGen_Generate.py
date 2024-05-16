@@ -12,17 +12,19 @@ import os
 import argparse
 import torch
 
+
 def args_parser():
     parser = argparse.ArgumentParser(
         description='Molecules Generation',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--model_name_or_path', default="zjunlp/MolGen-large-opt", type=str,
                         help='model name or path to load checkpoint from HF')
-    parser.add_argument('--input_data', default="MOSES", type=str, help='input data to condition and generate for MolGen')
+    parser.add_argument('--input_data', default="zinc250k", type=str,
+                        help='input data to condition and generate for MolGen')
     parser.add_argument('--num_samples', default=30000, type=int, help='number of samples to generate')
     parser.add_argument('--num_return_sequences', default=200, type=int, help='number of return sequence')
-    parser.add_argument('--max_length', default=55, type=int, help='max length')
-    parser.add_argument('--min_length', default=13, type=int, help='min length')
+    parser.add_argument('--max_length', default=100, type=int, help='max length')
+    parser.add_argument('--min_length', default=20, type=int, help='min length')
     parser.add_argument('--top_k', default=30, type=int, help='top_k')
     parser.add_argument('--top_p', default=1.0, type=float, help='top_p')
     parser.add_argument('--temperature', default=1.0, type=float, help='temperature')
@@ -30,12 +32,14 @@ def args_parser():
     args = parser.parse_args()
     return args
 
+
 def sf_encode(smile):
     try:
         encode = sf.encoder(smile)
         return encode
     except sf.EncoderError:
         return ''
+
 
 def dataset_to_selfie(input_data_path="../moldata/finetune/np_test.csv"):
     from pandarallel import pandarallel
@@ -49,7 +53,7 @@ def dataset_to_selfie(input_data_path="../moldata/finetune/np_test.csv"):
 
 
 def generate(model, tokenizer, num_samples=30000, num_return_sequences=256, no_repeat_ngram_size=2, max_length=64,
-             prompt="CC", device=torch.device('cuda'), top_k=50, top_p=0.95, temperature=1.0,):
+             prompt="CC", device=torch.device('cuda'), top_k=50, top_p=0.95, temperature=1.0, ):
     input_ids = tokenizer.encode(prompt, return_tensors="pt").to(device)
     # skip eos token
     input_ids = input_ids[:, :-1]
@@ -72,9 +76,9 @@ def generate(model, tokenizer, num_samples=30000, num_return_sequences=256, no_r
         pairs['cand_smiles'] += [s.replace(" ", "") for s in output]
     return pairs
 
-def MolGen_conditional_generate(model, tokenizer, test_data, num_samples=30000, num_return_sequences=200, max_length=55,
-                                min_length=13, device=torch.device('cuda'), top_k=30, top_p=1, temperature=1.0,):
 
+def MolGen_conditional_generate(model, tokenizer, test_data, num_samples=30000, num_return_sequences=200, max_length=55,
+                                min_length=13, device=torch.device('cuda'), top_k=30, top_p=1, temperature=1.0, ):
     pairs = {'input_smiles': [], 'cand_smiles': []}
     for example in tqdm(test_data):
         example_sf = sf_encode(example)
@@ -103,7 +107,6 @@ def MolGen_conditional_generate(model, tokenizer, test_data, num_samples=30000, 
 
 
 def compute_MOSES_metrics(generated_smiles, model_name, save_path, n_jobs=1, batch_size=1024, device='cuda'):
-
     metrics = moses.get_all_metrics(generated_smiles, n_jobs=n_jobs, device=device, batch_size=batch_size)
     metrics_table = [[k, v] for k, v in metrics.items()]
     print(tabulate(metrics_table, headers=["Metric", "Value"], tablefmt="pretty"))
@@ -114,6 +117,7 @@ def compute_MOSES_metrics(generated_smiles, model_name, save_path, n_jobs=1, bat
     df_new_row = pd.DataFrame(metrics, index=[model_name])
     result = pd.concat([result, df_new_row])
     result.to_csv(save_path)
+
 
 def compute_chemical_prop(generated_smiles, n_jobs=1):
     pool = Pool(n_jobs)
@@ -149,7 +153,13 @@ if __name__ == "__main__":
         test_data = get_dataset('test')
         MOLECULAR_PERFORMANCE_RESULT_PATH = './molecular_performance_MOSES.csv'
     elif args.input_data == "np":
-        input_data = pd.read_csv("../moldata/finetune/np_test.csv")
+        test_data = pd.read_csv("../moldata/finetune/np_test.csv")['smiles']
+        MOLECULAR_PERFORMANCE_RESULT_PATH = './molecular_performance_NP.csv'
+    elif args.input_data == "zinc250k":
+        test_data = pd.read_csv('../moldata/pretrain/zinc250k.csv')['smiles']
+        MOLECULAR_PERFORMANCE_RESULT_PATH = './molecular_performance_ZIN250k.csv'
+    else:
+        raise NotImplementedError
 
     tokenizer = AutoTokenizer.from_pretrained(args.model_name_or_path)
     if args.model_name_or_path.startswith("MolGen/"):
@@ -164,17 +174,17 @@ if __name__ == "__main__":
                          top_k=50, top_p=0.95, temperature=1.0, )
     else:
         pairs = MolGen_conditional_generate(model, tokenizer, test_data, num_samples=30000, num_return_sequences=200,
-                                            max_length=55, min_length=13, top_k=30, top_p=1, temperature=1.0,)
+                                            max_length=55, min_length=13, top_k=30, top_p=1, temperature=1.0, )
     # 2- save generated molecules
     print("=============== save generated molecules ===============")
     save_path = f"{model_name}-smiles.csv"
     df = pd.DataFrame(pairs)
     df.to_csv(save_path, index=None)
 
-    # 3- compute MOSES metrics
-    print("=============== compute MOSES metrics ===============")
-    compute_MOSES_metrics(generated_smiles=df['cand_smiles'], model_name=model_name,
-                          save_path=MOLECULAR_PERFORMANCE_RESULT_PATH, n_jobs=1, batch_size=1024, device='cuda')
+    # # 3- compute MOSES metrics
+    # print("=============== compute MOSES metrics ===============")
+    # compute_MOSES_metrics(generated_smiles=df['cand_smiles'], model_name=model_name,
+    #                       save_path=MOLECULAR_PERFORMANCE_RESULT_PATH, n_jobs=1, batch_size=1024, device='cuda')
 
     # 4- compute chemical property
     print("=============== compute chemical property ===============")

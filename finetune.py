@@ -43,6 +43,7 @@ def entrypoint(args):
 
     # Initialize DataModule
     datamodule = MolGenDataModule(**cfg.dataset)
+    datamodule.setup()
     df = pd.read_csv(f'{output_dir}/generated_smiles_qed_42.csv')
     dataset = Dataset.from_dict(df)
     dataset = DatasetDict({"train": dataset})

@@ -18,7 +18,7 @@ hydra:
 wandb_logs: true
 wandb:
   name: null
-  project: Molecule Language Model
-  entity: molgpt
+  project: small-molecule-generation
+  entity: drug-discovery
   tags: []
   mode: online
