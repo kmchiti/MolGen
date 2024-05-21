@@ -33,7 +33,7 @@ def set_plot_style(
     plt.rcParams['lines.linewidth'] = linewidth
 
 
-mode = 'substructures'
+mode = 'scaffold'
 
 from rdkit import Chem
 from rdkit.Chem.Scaffolds import MurckoScaffold
@@ -140,23 +140,31 @@ def entrypoint(cfg: DictConfig):
         test_scaffolds = set()
         for i in tqdm(range(0, total_rows, batch_size)):
             test_scaffolds.update(scaffolds_dataset['test']['scaffold'][i:i + batch_size])
-        print(test_scaffolds)
+        print(f'# scaffolds in test set: {len(test_scaffolds)}')
+        result = pd.DataFrame({'test_scaffolds': test_scaffolds})
+        save_path = f"./test_scaffolds_{cfg.dataset_name.split('/')[-1]}.csv"
+        result.to_csv(save_path)
+        print(f"save result in: {save_path}")
+
         print('=========================compute scaffolds valid set=========================')
         total_rows = len(scaffolds_dataset['valid'])
         valid_scaffolds = set()
         for i in tqdm(range(0, total_rows, batch_size)):
             valid_scaffolds.update(scaffolds_dataset['valid']['scaffold'][i:i + batch_size])
-        print(valid_scaffolds)
+        print(f'# scaffolds in valid set: {len(valid_scaffolds)}')
+        result = pd.DataFrame({'valid_scaffolds': valid_scaffolds})
+        save_path = f"./valid_scaffolds_{cfg.dataset_name.split('/')[-1]}.csv"
+        result.to_csv(save_path)
+        print(f"save result in: {save_path}")
+
         print('=========================compute scaffolds train set=========================')
         total_rows = len(scaffolds_dataset['train'])
         train_scaffolds = set()
         for i in tqdm(range(0, total_rows, batch_size)):
             train_scaffolds.update(scaffolds_dataset['train']['scaffold'][i:i + batch_size])
-        print(train_scaffolds)
-        result = {'train_scaffolds': train_scaffolds, 'valid_scaffolds': valid_scaffolds,
-                  'test_scaffolds': test_scaffolds}
-        result = pd.DataFrame(result)
-        save_path = f"./{cfg.dataset_name.split('/')[-1]}.csv"
+        print(f'# scaffolds in train set: {len(train_scaffolds)}')
+        result = pd.DataFrame({'train_scaffolds': train_scaffolds})
+        save_path = f"./train_scaffolds_{cfg.dataset_name.split('/')[-1]}.csv"
         result.to_csv(save_path)
         print(f"save result in: {save_path}")
 
