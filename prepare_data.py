@@ -7,6 +7,7 @@ from dataset import MolGenDataModule
 from datasets import load_dataset
 from tqdm import tqdm
 import matplotlib.pyplot as plt
+import pandas as pd
 
 
 def set_plot_style(
@@ -32,12 +33,46 @@ def set_plot_style(
     plt.rcParams['lines.linewidth'] = linewidth
 
 
-tokenize = True
+mode = 'scaffold'
+
+from rdkit import Chem
+from rdkit.Chem.Scaffolds import MurckoScaffold
+
+
+def compute_scaffold(smi):
+    try:
+        mol = Chem.MolFromSmiles(smi)
+        scaffold = MurckoScaffold.MurckoScaffoldSmiles(mol=mol, includeChirality=False)
+        return scaffold
+    except:
+        return None
+
+
+def process_batch(smiles_list):
+    scaffold_set = set()
+    for smi in smiles_list:
+        scaffold = compute_scaffold(smi)
+        if scaffold is not None:
+            scaffold_set.add(scaffold)
+    return scaffold_set
+
+
+def parallel_scaffold_extraction(dataset_split, num_workers=8):
+    # Split data into manageable chunks
+    chunk_size = len(dataset_split) // num_workers + 1  # plus one to handle rounding
+    chunks = [dataset_split[i:i + chunk_size] for i in range(0, len(dataset_split), chunk_size)]
+
+    unique_scaffolds = set()
+    with concurrent.futures.ProcessPoolExecutor(max_workers=num_workers) as executor:
+        results = executor.map(process_batch, chunks)
+        for result in results:
+            unique_scaffolds.update(result)
+    return unique_scaffolds
 
 
 @hydra.main(version_base=None, config_path="configs/dataset", config_name="pubchem_smiles")
 def entrypoint(cfg: DictConfig):
-    if tokenize:
+    if mode == 'tokenize':
         # Initialize DataModule
         datamodule = MolGenDataModule(**cfg)
         print(datamodule.tokenizer)
@@ -45,7 +80,25 @@ def entrypoint(cfg: DictConfig):
         print(datamodule.train_dataset)
         print(datamodule.eval_dataset)
 
-    else:
+    elif mode == 'scaffold':
+        print('load dataset')
+        raw_dataset = load_dataset(cfg.dataset_name)
+        print('=========================compute scaffolds test set=========================')
+        test_scaffolds = parallel_scaffold_extraction(raw_dataset['test']['SMILES'])
+        print(test_scaffolds)
+        print('=========================compute scaffolds train set=========================')
+        train_scaffolds = parallel_scaffold_extraction(raw_dataset['train']['SMILES'])
+        print(train_scaffolds)
+        print('=========================compute scaffolds valid set=========================')
+        valid_scaffolds = parallel_scaffold_extraction(raw_dataset['valid']['SMILES'])
+        print(valid_scaffolds)
+        result = {'train_scaffolds': train_scaffolds, 'valid_scaffolds': valid_scaffolds, 'test_scaffolds': test_scaffolds}
+        result = pd.DataFrame(result)
+        save_path = f"./{cfg.dataset_name.split('/')[-1]}.csv"
+        result.to_csv(save_path)
+        print(f"save result in: {save_path}")
+
+    elif mode == 'len-histogram':
         datamodule = MolGenDataModule(**cfg)
         print(datamodule.tokenizer)
         dataset = load_dataset(datamodule.dataset_name, num_proc=datamodule.dataloader_num_workers)
@@ -117,6 +170,9 @@ def entrypoint(cfg: DictConfig):
         axes.set_xlabel('Length of samples')
         axes.grid()
         plt.savefig(f'{save_path[:-4]}.png')
+
+    else:
+        raise NotImplementedError
 
 
 if __name__ == "__main__":
