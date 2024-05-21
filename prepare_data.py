@@ -8,7 +8,7 @@ from datasets import load_dataset
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 import pandas as pd
-
+from rdkit.Chem.Scaffolds import MurckoScaffold
 
 def set_plot_style(
         fsize: int = 14,
@@ -35,43 +35,10 @@ def set_plot_style(
 
 mode = 'scaffold'
 
-from rdkit import Chem
-from rdkit.Chem.Scaffolds import MurckoScaffold
-
-
-def compute_scaffold(smi):
-    try:
-        mol = Chem.MolFromSmiles(smi)
-        scaffold = MurckoScaffold.MurckoScaffoldSmiles(mol=mol, includeChirality=False)
-        return scaffold
-    except:
-        return None
-
-
-def process_batch(smiles_list):
-    scaffold_set = set()
-    for smi in smiles_list:
-        scaffold = compute_scaffold(smi)
-        if scaffold is not None:
-            scaffold_set.add(scaffold)
-    return scaffold_set
-
-
-def parallel_scaffold_extraction(dataset_split, num_workers=8):
-    # Split data into manageable chunks
-    chunk_size = len(dataset_split) // num_workers + 1  # plus one to handle rounding
-    chunks = [dataset_split[i:i + chunk_size] for i in range(0, len(dataset_split), chunk_size)]
-
-    unique_scaffolds = set()
-    with concurrent.futures.ProcessPoolExecutor(max_workers=num_workers) as executor:
-        results = executor.map(process_batch, chunks)
-        for result in results:
-            unique_scaffolds.update(result)
-    return unique_scaffolds
-
 
 @hydra.main(version_base=None, config_path="configs/dataset", config_name="pubchem_smiles")
 def entrypoint(cfg: DictConfig):
+
     if mode == 'tokenize':
         # Initialize DataModule
         datamodule = MolGenDataModule(**cfg)
@@ -81,6 +48,34 @@ def entrypoint(cfg: DictConfig):
         print(datamodule.eval_dataset)
 
     elif mode == 'scaffold':
+        # def compute_scaffold(smi):
+        #     try:
+        #         mol = Chem.MolFromSmiles(smi)
+        #         scaffold = MurckoScaffold.MurckoScaffoldSmiles(mol=mol, includeChirality=False)
+        #         return scaffold
+        #     except:
+        #         return None
+        #
+        # def process_batch(smiles_list):
+        #     scaffold_set = set()
+        #     for smi in smiles_list:
+        #         scaffold = compute_scaffold(smi)
+        #         if scaffold is not None:
+        #             scaffold_set.add(scaffold)
+        #     return scaffold_set
+        #
+        # def parallel_scaffold_extraction(dataset_split, num_workers=8):
+        #     # Split data into manageable chunks
+        #     chunk_size = len(dataset_split) // num_workers + 1  # plus one to handle rounding
+        #     chunks = [dataset_split[i:i + chunk_size] for i in range(0, len(dataset_split), chunk_size)]
+        #
+        #     unique_scaffolds = set()
+        #     with concurrent.futures.ProcessPoolExecutor(max_workers=num_workers) as executor:
+        #         results = executor.map(process_batch, chunks)
+        #         for result in results:
+        #             unique_scaffolds.update(result)
+        #     return unique_scaffolds
+
         # print('load dataset')
         # raw_dataset = load_dataset(cfg.dataset_name)
         # print('=========================compute scaffolds test set=========================')
@@ -97,11 +92,13 @@ def entrypoint(cfg: DictConfig):
         # save_path = f"./{cfg.dataset_name.split('/')[-1]}.csv"
         # result.to_csv(save_path)
         # print(f"save result in: {save_path}")
+
         print('load dataset')
         datamodule = MolGenDataModule(**cfg)
         print(datamodule.tokenizer)
         dataset = load_dataset(datamodule.dataset_name, num_proc=datamodule.dataloader_num_workers)
 
+        from rdkit import Chem
         def compute_scaffold(smilse):
             if isinstance(smilse, list):
                 scaffolds = []
