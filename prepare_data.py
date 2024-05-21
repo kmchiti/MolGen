@@ -81,18 +81,72 @@ def entrypoint(cfg: DictConfig):
         print(datamodule.eval_dataset)
 
     elif mode == 'scaffold':
+        # print('load dataset')
+        # raw_dataset = load_dataset(cfg.dataset_name)
+        # print('=========================compute scaffolds test set=========================')
+        # test_scaffolds = parallel_scaffold_extraction(raw_dataset['test']['SMILES'])
+        # print(test_scaffolds)
+        # print('=========================compute scaffolds train set=========================')
+        # train_scaffolds = parallel_scaffold_extraction(raw_dataset['train']['SMILES'])
+        # print(train_scaffolds)
+        # print('=========================compute scaffolds valid set=========================')
+        # valid_scaffolds = parallel_scaffold_extraction(raw_dataset['valid']['SMILES'])
+        # print(valid_scaffolds)
+        # result = {'train_scaffolds': train_scaffolds, 'valid_scaffolds': valid_scaffolds, 'test_scaffolds': test_scaffolds}
+        # result = pd.DataFrame(result)
+        # save_path = f"./{cfg.dataset_name.split('/')[-1]}.csv"
+        # result.to_csv(save_path)
+        # print(f"save result in: {save_path}")
         print('load dataset')
-        raw_dataset = load_dataset(cfg.dataset_name)
+        datamodule = MolGenDataModule(**cfg)
+        print(datamodule.tokenizer)
+        dataset = load_dataset(datamodule.dataset_name, num_proc=datamodule.dataloader_num_workers)
+
+        def compute_scaffold(smi):
+            scaffold = MurckoScaffold.MurckoScaffoldSmiles(
+                mol=Chem.MolFromSmiles(smi), includeChirality=False
+            )
+            return scaffold
+
+        def extract_scaffolds(
+                element,
+                mol_type,
+        ):
+
+            return {"scaffold": compute_scaffold(element[mol_type])}
+
+        # Map function to extract lengths
+        scaffolds_dataset = dataset.map(
+            extract_scaffolds,
+            batched=True,
+            remove_columns=dataset["train"].column_names,
+            num_proc=datamodule.preprocess_num_workers,
+            fn_kwargs={
+                "mol_type": datamodule.mol_type,
+            },
+        )
+
+        batch_size = 5000000
         print('=========================compute scaffolds test set=========================')
-        test_scaffolds = parallel_scaffold_extraction(raw_dataset['test']['SMILES'])
+        total_rows = len(scaffolds_dataset['test'])
+        test_scaffolds = set()
+        for i in tqdm(range(0, total_rows, batch_size)):
+            test_scaffolds.add(set(scaffolds_dataset['test']['scaffold'][i:i + batch_size]))
         print(test_scaffolds)
-        print('=========================compute scaffolds train set=========================')
-        train_scaffolds = parallel_scaffold_extraction(raw_dataset['train']['SMILES'])
-        print(train_scaffolds)
         print('=========================compute scaffolds valid set=========================')
-        valid_scaffolds = parallel_scaffold_extraction(raw_dataset['valid']['SMILES'])
+        total_rows = len(scaffolds_dataset['valid'])
+        valid_scaffolds = set()
+        for i in tqdm(range(0, total_rows, batch_size)):
+            valid_scaffolds.add(set(scaffolds_dataset['valid']['scaffold'][i:i + batch_size]))
         print(valid_scaffolds)
-        result = {'train_scaffolds': train_scaffolds, 'valid_scaffolds': valid_scaffolds, 'test_scaffolds': test_scaffolds}
+        print('=========================compute scaffolds train set=========================')
+        total_rows = len(scaffolds_dataset['train'])
+        train_scaffolds = set()
+        for i in tqdm(range(0, total_rows, batch_size)):
+            train_scaffolds.add(set(scaffolds_dataset['train']['scaffold'][i:i + batch_size]))
+        print(train_scaffolds)
+        result = {'train_scaffolds': train_scaffolds, 'valid_scaffolds': valid_scaffolds,
+                  'test_scaffolds': test_scaffolds}
         result = pd.DataFrame(result)
         save_path = f"./{cfg.dataset_name.split('/')[-1]}.csv"
         result.to_csv(save_path)
