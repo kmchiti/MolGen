@@ -33,7 +33,7 @@ def set_plot_style(
     plt.rcParams['lines.linewidth'] = linewidth
 
 
-mode = 'scaffold'
+mode = 'substructures'
 
 from rdkit import Chem
 from rdkit.Chem.Scaffolds import MurckoScaffold
@@ -112,8 +112,8 @@ def entrypoint(cfg: DictConfig):
                 return scaffolds
             else:
                 scaffolds = MurckoScaffold.MurckoScaffoldSmiles(
-                        mol=Chem.MolFromSmiles(smilse), includeChirality=False
-                    )
+                    mol=Chem.MolFromSmiles(smilse), includeChirality=False
+                )
                 return scaffolds
 
         def extract_scaffolds(
@@ -159,6 +159,65 @@ def entrypoint(cfg: DictConfig):
         save_path = f"./{cfg.dataset_name.split('/')[-1]}.csv"
         result.to_csv(save_path)
         print(f"save result in: {save_path}")
+
+    elif mode == 'substructures':
+        from rdkit import Chem
+        from rdkit.Chem import BRICS
+        from collections import Counter
+
+        def extract_substructures(smiles_list):
+            substructures_set = set()  # Use a set to store unique substructures
+
+            # Generate substructures from each molecule
+            for smiles in smiles_list:
+                mol = Chem.MolFromSmiles(smiles)
+                if mol is not None:
+                    # Get all possible substructures using BRICS algorithm
+                    fragments = BRICS.BRICSDecompose(mol)
+                    cleaned_fragments = {clean_substructure(frag) for frag in fragments}
+                    substructures_set.update(cleaned_fragments)
+
+            return substructures_set
+
+        def clean_substructure(fragment):
+            # Remove BRICS connection points: strip everything up to and including '*]'
+            import re
+            cleaned = re.sub(r'\[\d+\*\]', '', fragment)
+            return cleaned
+
+        save_path = f"./{cfg.dataset_name.split('/')[-1]}.csv"
+        result = pd.read_csv(save_path, index_col=0)
+
+        common_elements = result["test_scaffolds"].intersection(result["valid_scaffolds"])
+        print(f"number of common element between scaffolds test and valid set: {len(common_elements)}")
+        print(common_elements)
+        common_elements = result["train_scaffolds"].intersection(result["valid_scaffolds"])
+        print(f"number of common element between scaffolds train and valid set: {len(common_elements)}")
+        print(common_elements)
+        common_elements = result["train_scaffolds"].intersection(result["test_scaffolds"])
+        print(f"number of common element between scaffolds train and test set: {len(common_elements)}")
+        print(common_elements)
+
+        substructures_testset = extract_substructures(list(result["test_scaffolds"]))
+        substructures_validset = extract_substructures(list(result["valid_scaffolds"]))
+        substructures_trainset = extract_substructures(list(result["train_scaffolds"]))
+
+        save_path = f"./substructures_{cfg.dataset_name.split('/')[-1]}.csv"
+        substructures_result = {'train_scaffolds': substructures_trainset, 'valid_scaffolds': substructures_validset,
+                                'test_scaffolds': substructures_testset}
+        substructures_result = pd.DataFrame(substructures_result)
+        substructures_result.to_csv(save_path)
+        print(f"save substructures result in: {save_path}")
+
+        common_elements = substructures_result["test_scaffolds"].intersection(substructures_result["valid_scaffolds"])
+        print(f"number of common element between substructures test and valid set: {len(common_elements)}")
+        print(common_elements)
+        common_elements = substructures_result["train_scaffolds"].intersection(substructures_result["valid_scaffolds"])
+        print(f"number of common element between substructures train and valid set: {len(common_elements)}")
+        print(common_elements)
+        common_elements = substructures_result["train_scaffolds"].intersection(substructures_result["test_scaffolds"])
+        print(f"number of common element between substructures train and test set: {len(common_elements)}")
+        print(common_elements)
 
     elif mode == 'len-histogram':
         datamodule = MolGenDataModule(**cfg)
