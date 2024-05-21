@@ -102,11 +102,19 @@ def entrypoint(cfg: DictConfig):
         print(datamodule.tokenizer)
         dataset = load_dataset(datamodule.dataset_name, num_proc=datamodule.dataloader_num_workers)
 
-        def compute_scaffold(smi):
-            scaffold = MurckoScaffold.MurckoScaffoldSmiles(
-                mol=Chem.MolFromSmiles(smi), includeChirality=False
-            )
-            return scaffold
+        def compute_scaffold(smilse):
+            if isinstance(smilse, list):
+                scaffolds = []
+                for smi in smilse:
+                    scaffolds.append(MurckoScaffold.MurckoScaffoldSmiles(
+                        mol=Chem.MolFromSmiles(smi), includeChirality=False
+                    ))
+                return scaffolds
+            else:
+                scaffolds = MurckoScaffold.MurckoScaffoldSmiles(
+                        mol=Chem.MolFromSmiles(smilse), includeChirality=False
+                    )
+                return scaffolds
 
         def extract_scaffolds(
                 element,
@@ -131,19 +139,19 @@ def entrypoint(cfg: DictConfig):
         total_rows = len(scaffolds_dataset['test'])
         test_scaffolds = set()
         for i in tqdm(range(0, total_rows, batch_size)):
-            test_scaffolds.add(set(scaffolds_dataset['test']['scaffold'][i:i + batch_size]))
+            test_scaffolds.update(scaffolds_dataset['test']['scaffold'][i:i + batch_size])
         print(test_scaffolds)
         print('=========================compute scaffolds valid set=========================')
         total_rows = len(scaffolds_dataset['valid'])
         valid_scaffolds = set()
         for i in tqdm(range(0, total_rows, batch_size)):
-            valid_scaffolds.add(set(scaffolds_dataset['valid']['scaffold'][i:i + batch_size]))
+            valid_scaffolds.update(scaffolds_dataset['valid']['scaffold'][i:i + batch_size])
         print(valid_scaffolds)
         print('=========================compute scaffolds train set=========================')
         total_rows = len(scaffolds_dataset['train'])
         train_scaffolds = set()
         for i in tqdm(range(0, total_rows, batch_size)):
-            train_scaffolds.add(set(scaffolds_dataset['train']['scaffold'][i:i + batch_size]))
+            train_scaffolds.update(scaffolds_dataset['train']['scaffold'][i:i + batch_size])
         print(train_scaffolds)
         result = {'train_scaffolds': train_scaffolds, 'valid_scaffolds': valid_scaffolds,
                   'test_scaffolds': test_scaffolds}
