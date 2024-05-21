@@ -1,0 +1,12 @@
+model_name_or_path: 'llama_small_FA'
+hidden_size: 480
+num_hidden_layers: 12
+num_attention_heads: 20
+intermediate_size: 1920
+bos_token_id: "<bos>"
+eos_token_id: "<eos>"
+use_flash_attn: true
+fused_bias_fc: false
+fused_mlp: false
+fused_dropout_add_ln: false
+residual_in_fp32: true
