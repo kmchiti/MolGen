@@ -120,8 +120,11 @@ def entrypoint(cfg: DictConfig):
 
             return {"scaffold": compute_scaffold(element[mol_type])}
 
+
+        batch_size = 5000000
+        print('=========================compute scaffolds test set=========================')
         # Map function to extract lengths
-        scaffolds_dataset = dataset.map(
+        scaffolds_dataset = dataset['test'].map(
             extract_scaffolds,
             batched=True,
             remove_columns=dataset["train"].column_names,
@@ -130,37 +133,54 @@ def entrypoint(cfg: DictConfig):
                 "mol_type": datamodule.mol_type,
             },
         )
-
-        batch_size = 5000000
-        print('=========================compute scaffolds test set=========================')
-        total_rows = len(scaffolds_dataset['test'])
+        total_rows = len(scaffolds_dataset)
         test_scaffolds = set()
         for i in tqdm(range(0, total_rows, batch_size)):
-            test_scaffolds.update(scaffolds_dataset['test']['scaffold'][i:i + batch_size])
+            test_scaffolds.update(scaffolds_dataset['scaffold'][i:i + batch_size])
         print(f'# scaffolds in test set: {len(test_scaffolds)}')
-        result = pd.DataFrame({'test_scaffolds': test_scaffolds})
+        result = pd.DataFrame({'test_scaffolds': list(test_scaffolds)})
         save_path = f"./test_scaffolds_{cfg.dataset_name.split('/')[-1]}.csv"
         result.to_csv(save_path)
         print(f"save result in: {save_path}")
 
         print('=========================compute scaffolds valid set=========================')
-        total_rows = len(scaffolds_dataset['valid'])
+        # Map function to extract lengths
+        scaffolds_dataset = dataset['valid'].map(
+            extract_scaffolds,
+            batched=True,
+            remove_columns=dataset["train"].column_names,
+            num_proc=datamodule.preprocess_num_workers,
+            fn_kwargs={
+                "mol_type": datamodule.mol_type,
+            },
+        )
+        total_rows = len(scaffolds_dataset)
         valid_scaffolds = set()
         for i in tqdm(range(0, total_rows, batch_size)):
-            valid_scaffolds.update(scaffolds_dataset['valid']['scaffold'][i:i + batch_size])
+            valid_scaffolds.update(scaffolds_dataset['scaffold'][i:i + batch_size])
         print(f'# scaffolds in valid set: {len(valid_scaffolds)}')
-        result = pd.DataFrame({'valid_scaffolds': valid_scaffolds})
+        result = pd.DataFrame({'valid_scaffolds': list(valid_scaffolds)})
         save_path = f"./valid_scaffolds_{cfg.dataset_name.split('/')[-1]}.csv"
         result.to_csv(save_path)
         print(f"save result in: {save_path}")
 
         print('=========================compute scaffolds train set=========================')
-        total_rows = len(scaffolds_dataset['train'])
+        # Map function to extract lengths
+        scaffolds_dataset = dataset['train'].map(
+            extract_scaffolds,
+            batched=True,
+            remove_columns=dataset["train"].column_names,
+            num_proc=datamodule.preprocess_num_workers,
+            fn_kwargs={
+                "mol_type": datamodule.mol_type,
+            },
+        )
+        total_rows = len(scaffolds_dataset)
         train_scaffolds = set()
         for i in tqdm(range(0, total_rows, batch_size)):
-            train_scaffolds.update(scaffolds_dataset['train']['scaffold'][i:i + batch_size])
+            train_scaffolds.update(scaffolds_dataset['scaffold'][i:i + batch_size])
         print(f'# scaffolds in train set: {len(train_scaffolds)}')
-        result = pd.DataFrame({'train_scaffolds': train_scaffolds})
+        result = pd.DataFrame({'train_scaffolds': list(train_scaffolds)})
         save_path = f"./train_scaffolds_{cfg.dataset_name.split('/')[-1]}.csv"
         result.to_csv(save_path)
         print(f"save result in: {save_path}")
