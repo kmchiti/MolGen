@@ -33,7 +33,7 @@ def set_plot_style(
     plt.rcParams['lines.linewidth'] = linewidth
 
 
-mode = 'scaffold'
+mode = 'substructures'
 
 
 @hydra.main(version_base=None, config_path="configs/dataset", config_name="pubchem_smiles")
@@ -189,58 +189,95 @@ def entrypoint(cfg: DictConfig):
         from rdkit import Chem
         from rdkit.Chem import BRICS
         from collections import Counter
+        import multiprocessing
+        from collections import Counter
 
-        def extract_substructures(smiles_list):
-            substructures_set = set()  # Use a set to store unique substructures
-
-            # Generate substructures from each molecule
-            for smiles in smiles_list:
+        def process_substructures(smiles_chunk):
+            substructures = Counter()
+            for smiles in smiles_chunk:
                 mol = Chem.MolFromSmiles(smiles)
                 if mol is not None:
                     # Get all possible substructures using BRICS algorithm
                     fragments = BRICS.BRICSDecompose(mol)
                     cleaned_fragments = {clean_substructure(frag) for frag in fragments}
-                    substructures_set.update(cleaned_fragments)
-
-            return substructures_set
+                    substructures.update(cleaned_fragments)
+            return substructures
 
         def clean_substructure(fragment):
-            # Remove BRICS connection points: strip everything up to and including '*]'
             import re
-            cleaned = re.sub(r'\[\d+\*\]', '', fragment)
-            return cleaned
+            return re.sub(r'\[\d+\*\]', '', fragment)
 
-        save_path = f"./{cfg.dataset_name.split('/')[-1]}.csv"
-        result = pd.read_csv(save_path, index_col=0)
+        def extract_substructures(smiles_list, num_workers=None):
+            if num_workers is None:
+                num_workers = multiprocessing.cpu_count()
 
-        common_elements = result["test_scaffolds"].intersection(result["valid_scaffolds"])
+            chunk_size = len(smiles_list) // num_workers + 1
+            print("chunk_size:", chunk_size)
+            chunks = [smiles_list[i:i + chunk_size] for i in range(0, len(smiles_list), chunk_size)]
+
+            # Set up a multiprocessing pool and process the chunks
+            # Use tqdm to show the progress bar for the chunks being processed
+            with multiprocessing.Pool(num_workers) as pool:
+                results = []
+                for result in tqdm(pool.imap(process_substructures, chunks), total=len(chunks),
+                                   desc="Processing SMILES"):
+                    results.append(result)
+
+            # Combine results from all workers into a single Counter
+            total_substructures = Counter()
+            for result in results:
+                total_substructures.update(result)
+
+            return total_substructures
+
+        save_path = f"./test_scaffolds_{cfg.dataset_name.split('/')[-1]}.csv"
+        result_test = set(pd.read_csv(save_path, index_col=0)['test_scaffolds'])
+        save_path = f"./valid_scaffolds_{cfg.dataset_name.split('/')[-1]}.csv"
+        result_valid = set(pd.read_csv(save_path, index_col=0)['valid_scaffolds'])
+        save_path = f"./train_scaffolds_{cfg.dataset_name.split('/')[-1]}.csv"
+        result_train = set(pd.read_csv(save_path, index_col=0)['train_scaffolds'])
+
+        common_elements = result_test.intersection(result_valid)
         print(f"number of common element between scaffolds test and valid set: {len(common_elements)}")
         print(common_elements)
-        common_elements = result["train_scaffolds"].intersection(result["valid_scaffolds"])
+        common_elements = result_train.intersection(result_valid)
         print(f"number of common element between scaffolds train and valid set: {len(common_elements)}")
         print(common_elements)
-        common_elements = result["train_scaffolds"].intersection(result["test_scaffolds"])
+        common_elements = result_train.intersection(result_test)
         print(f"number of common element between scaffolds train and test set: {len(common_elements)}")
         print(common_elements)
 
-        substructures_testset = extract_substructures(list(result["test_scaffolds"]))
-        substructures_validset = extract_substructures(list(result["valid_scaffolds"]))
-        substructures_trainset = extract_substructures(list(result["train_scaffolds"]))
-
-        save_path = f"./substructures_{cfg.dataset_name.split('/')[-1]}.csv"
-        substructures_result = {'train_scaffolds': substructures_trainset, 'valid_scaffolds': substructures_validset,
-                                'test_scaffolds': substructures_testset}
-        substructures_result = pd.DataFrame(substructures_result)
+        print('=========================extract substructures test set=========================')
+        substructures_testset = extract_substructures(list(result_test))
+        save_path = f"./substructures_test_{cfg.dataset_name.split('/')[-1]}.csv"
+        substructures_result = pd.DataFrame(list(substructures_testset.items()), columns=['Substructure', 'Count'])
         substructures_result.to_csv(save_path)
         print(f"save substructures result in: {save_path}")
 
-        common_elements = substructures_result["test_scaffolds"].intersection(substructures_result["valid_scaffolds"])
+        print('=========================extract substructures valid set=========================')
+        substructures_validset = extract_substructures(list(result_valid))
+        save_path = f"./substructures_valid_{cfg.dataset_name.split('/')[-1]}.csv"
+        substructures_result = pd.DataFrame(list(substructures_validset.items()), columns=['Substructure', 'Count'])
+        substructures_result.to_csv(save_path)
+        print(f"save substructures result in: {save_path}")
+
+        print('=========================extract substructures train set=========================')
+        substructures_trainset = extract_substructures(list(result_train))
+        save_path = f"./substructures_train_{cfg.dataset_name.split('/')[-1]}.csv"
+        substructures_result = pd.DataFrame(list(substructures_trainset.items()), columns=['Substructure', 'Count'])
+        substructures_result.to_csv(save_path)
+        print(f"save substructures result in: {save_path}")
+
+        substructures_testset = set(substructures_testset.keys())
+        substructures_validset = set(substructures_validset.keys())
+        substructures_trainset = set(substructures_trainset.keys())
+        common_elements = substructures_testset.intersection(substructures_validset)
         print(f"number of common element between substructures test and valid set: {len(common_elements)}")
         print(common_elements)
-        common_elements = substructures_result["train_scaffolds"].intersection(substructures_result["valid_scaffolds"])
+        common_elements = substructures_trainset.intersection(substructures_validset)
         print(f"number of common element between substructures train and valid set: {len(common_elements)}")
         print(common_elements)
-        common_elements = substructures_result["train_scaffolds"].intersection(substructures_result["test_scaffolds"])
+        common_elements = substructures_trainset.intersection(substructures_testset)
         print(f"number of common element between substructures train and test set: {len(common_elements)}")
         print(common_elements)
 
