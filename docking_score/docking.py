@@ -22,6 +22,7 @@ class DockingConfig:
     num_modes: int = 10
     timeout_gen3d: int = 30
     timeout_dock: int = 100
+    seed: int = 42
     receptor_file: str = field(init=False)
     box_parameter: Tuple[Tuple[float, float, float], Tuple[float, float, float]] = field(init=False)
 
@@ -67,6 +68,7 @@ class DockingVina(object):
         self.num_modes = docking_params.num_modes
         self.timeout_gen3d = docking_params.timeout_gen3d
         self.timeout_dock = docking_params.timeout_dock
+        self.seed = docking_params.seed
 
     def gen_3d(self, smi, ligand_mol_file):
         run_line = 'obabel -:%s --gen3D -O %s' % (smi, ligand_mol_file)
@@ -85,6 +87,7 @@ class DockingVina(object):
         run_line += ' --cpu %d' % (self.num_cpu_dock)
         run_line += ' --num_modes %d' % (self.num_modes)
         run_line += ' --exhaustiveness %d ' % (self.exhaustiveness)
+        run_line += ' --seed %d ' % (self.seed)
         result = subprocess.check_output(run_line.split(),
                                          stderr=subprocess.STDOUT,
                                          timeout=self.timeout_dock, universal_newlines=True)
