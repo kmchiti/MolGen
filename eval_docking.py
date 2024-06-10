@@ -10,6 +10,7 @@ from docking_score import DockingConfig, DockingVina
 from moses.metrics.metrics import canonic_smiles
 from moses.utils import disable_rdkit_log, mapper
 import time
+import portalocker
 
 DOCKING_SCORE_RESULT_PATH = 'docking_scores.csv'
 
@@ -28,6 +29,30 @@ def args_parser():
     return args
 
 
+def read_df(file_path):
+    with open(file_path, 'r') as file:
+        portalocker.lock(file, portalocker.LOCK_SH)  # Shared lock for reading
+        df = pd.read_csv(file, index_col=0)
+        portalocker.unlock(file)
+        return df
+
+
+def save_df(df, file_path):
+    with open(file_path, 'r+') as file:
+        portalocker.lock(file, portalocker.LOCK_EX)  # Exclusive lock for writing
+        file.seek(0)
+        df.to_csv(file)
+        file.truncate()  # Important to truncate in case new file is shorter
+        portalocker.unlock(file)
+
+
+def average_of_lowest_negatives(column):
+    # Filter the column to keep only negative values
+    negative_values = column[column < 0]
+    # Get the top 10 lowest negative values and compute their average
+    return negative_values.nsmallest(10).mean()
+
+
 def entrypoint(args):
     # Initialize setup
     with initialize(version_base=None, config_path="configs"):
@@ -41,7 +66,7 @@ def entrypoint(args):
     save_path = os.path.join(output_dir, DOCKING_SCORE_RESULT_PATH)
     if os.path.exists(save_path):
         print(f'load generated smiles from {save_path}')
-        docking_metrics = pd.read_csv(save_path, index_col=0)
+        docking_metrics = read_df(save_path)
     else:
         print(f"select valid and unique molecules and save in {save_path}")
         df = pd.read_csv(os.path.join(output_dir, 'generated_smiles_42.csv'), index_col=0)
@@ -52,11 +77,11 @@ def entrypoint(args):
         # select unique and valid molecules
         new_smiles = list(set(smiles) - {None})
         docking_metrics['SMILES'] = np.array(new_smiles)
-        docking_metrics['fa7'] = np.zeros(len(df['SMILES']))
-        docking_metrics['parp1'] = np.zeros(len(df['SMILES']))
-        docking_metrics['5ht1b'] = np.zeros(len(df['SMILES']))
-        docking_metrics['jak2'] = np.zeros(len(df['SMILES']))
-        docking_metrics['braf'] = np.zeros(len(df['SMILES']))
+        docking_metrics['fa7'] = np.zeros(len(new_smiles))
+        docking_metrics['parp1'] = np.zeros(len(new_smiles))
+        docking_metrics['5ht1b'] = np.zeros(len(new_smiles))
+        docking_metrics['jak2'] = np.zeros(len(new_smiles))
+        docking_metrics['braf'] = np.zeros(len(new_smiles))
         docking_metrics.to_csv(save_path)
 
     indices = np.where(docking_metrics[args.target] == 1000)[0]
@@ -65,21 +90,32 @@ def entrypoint(args):
     else:
         last_index = 0
 
-    print(f"start compute metric for target {args.target} from {last_index} to {last_index+args.batch_size}")
-    docking_metrics[args.target][last_index+args.batch_size+1] = 1000
+    print(f"start compute metric for target {args.target} from {last_index} to {last_index + args.batch_size}")
+    docking_metrics.loc[last_index + args.batch_size, args.target] = 1000
+    save_df(docking_metrics, save_path)
 
     docking_cfg = DockingConfig(target_name=args.target, num_sub_proc=args.preprocess_num_jobs,
                                 num_cpu_dock=1, seed=args.seed)
     target = DockingVina(docking_cfg)
 
-    st = time.time()
-    new_smiles_scores = target.predict(docking_metrics['SMILES'][last_index:last_index + args.batch_size])
-    print(f'finish docking in {time.time() - st} seconds')
+    try:
+        st = time.time()
+        new_smiles_scores = target.predict(docking_metrics['SMILES'][last_index:last_index + args.batch_size])
+        print(f'finish docking in {time.time() - st} seconds')
+        docking_metrics.loc[last_index:last_index + args.batch_size - 1, args.target] = new_smiles_scores
+        save_df(docking_metrics, save_path)
+    except:
+        docking_metrics.loc[last_index + args.batch_size, args.target] = 0
+        save_df(docking_metrics, save_path)
+        print('FAILED')
 
-    docking_metrics.loc[last_index:last_index + args.batch_size, args.target] = new_smiles_scores
-
-    top10_df = pd.DataFrame({col: docking_metrics[col].nsmallest(10).values for col in docking_metrics})
-    print(top10_df)
+    negative_values = docking_metrics[args.target][docking_metrics[args.target] < 0]
+    res_ = negative_values.nsmallest(int(0.05 * len(docking_metrics['SMILES']))).mean()
+    print(f'Average top 5% of {args.target}: {res_}')
     target.__del__()
 
 
+if __name__ == "__main__":
+    os.environ['TOKENIZERS_PARALLELISM'] = 'true'
+    args = args_parser()
+    entrypoint(args)
