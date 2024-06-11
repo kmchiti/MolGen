@@ -68,19 +68,11 @@ def save_df(df, file_path, indices, target_column, new_values):
     update_df[target_column] = new_values
 
     # Construct the new file name
-    new_file_path = f"{file_path}_{target_column}_{indices[-1]}"
+    new_file_path = f"{file_path.split('.csv')[0]}_{target_column}_{indices[-1]}.csv"
 
     # Save the new DataFrame to the new file
     update_df.to_csv(new_file_path)
     print(f"Saved updated indices {indices} to {new_file_path}")
-
-
-def average_of_lowest_negatives(column):
-    # Filter the column to keep only negative values
-    negative_values = column[column < 0]
-    # Get the top 10 lowest negative values and compute their average
-    return negative_values.nsmallest(10).mean()
-
 
 def entrypoint(args):
     # Initialize setup
@@ -138,7 +130,7 @@ def entrypoint(args):
         print('FAILED')
 
     negative_values = docking_metrics[args.target][docking_metrics[args.target] < 0]
-    res_ = negative_values.nsmallest(int(0.05 * len(docking_metrics['SMILES']))).mean()
+    res_ = negative_values.nsmallest(int(0.05 * len(negative_values))).mean()
     print(f'Average top 5% of {args.target}: {res_}')
     target.__del__()
 
