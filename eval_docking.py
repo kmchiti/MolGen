@@ -11,9 +11,27 @@ from moses.metrics.metrics import canonic_smiles
 from moses.utils import disable_rdkit_log, mapper
 import time
 import portalocker
+import signal
+import sys
 
 DOCKING_SCORE_RESULT_PATH = 'docking_scores.csv'
+# Global variables to be used in signal handler
+docking_metrics = None
+last_index = None
+args = None
+save_path = None
 
+def handle_sigterm(signum, frame):
+    print("SIGTERM received. Saving state and exiting...")
+    if docking_metrics is not None and last_index is not None and args is not None and save_path is not None:
+        docking_metrics.loc[last_index + args.batch_size, args.target] = 0
+        save_df(docking_metrics, save_path)
+        print('FAILED')
+    sys.exit(0)
+
+
+# Register the signal handler
+signal.signal(signal.SIGTERM, handle_sigterm)
 
 def args_parser():
     parser = argparse.ArgumentParser(
