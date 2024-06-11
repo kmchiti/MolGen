@@ -4,42 +4,45 @@
 counter=0
 max_submissions=7
 
-# Submit the first job
-sbatch scripts/eval_docking.sh
-echo "First job submitted at $(date)."
-((counter++))  # Increment the counter
+# List of targets to iterate over
+targets=('fa7' 'parp1' '5ht1b' 'jak2' 'braf')
 
-while true; do
-    # Check if counter has reached the limit
-    if [[ "$counter" -ge $max_submissions ]]; then
-        echo "Maximum number of submissions ($max_submissions) reached. No more jobs will be submitted."
-        break  # Exit the loop
-    fi
+# Loop through each target and submit a job
+for target in "${targets[@]}"; do
+    # Submit the first job for the current target
+    sbatch scripts/eval_docking.sh $target
+    echo "First job for target $target submitted at $(date)."
+    ((counter++))  # Increment the counter
 
-    # Wait until all jobs are running
     while true; do
-        # Get all jobs for the user and their statuses
-        job_statuses=$(squeue -u kamran.chitsaz | awk 'NR>1 {print $5}')  # Skip the header line and get only the status column
-
-        # Count the number of jobs that are not running
-        non_running_jobs=$(echo "$job_statuses" | grep -vc 'R')
-
-        # Check if there are no non-running jobs and at least one job exists
-        if [[ "$non_running_jobs" -eq 0 ]] && [[ ! -z "$job_statuses" ]]; then
-            echo "All jobs are running at $(date)."
-            break
-        else
-            echo "Not all jobs are running or no jobs are currently queued at $(date). Checking again in 10 seconds."
-            sleep 10
+        # Check if counter has reached the limit
+        if [[ "$counter" -ge $max_submissions ]]; then
+            echo "Maximum number of submissions ($max_submissions) reached. No more jobs will be submitted for target $target."
+            break  # Exit the loop for the current target
         fi
+
+        # Wait until all jobs are running
+        while true; do
+            job_statuses=$(squeue -u kamran.chitsaz | awk 'NR>1 {print $5}')
+            non_running_jobs=$(echo "$job_statuses" | grep -vc 'R')
+
+            if [[ "$non_running_jobs" -eq 0 ]] && [[ ! -z "$job_statuses" ]]; then
+                echo "All jobs are running at $(date) for target $target."
+                break
+            else
+                echo "Not all jobs are running or no jobs are currently queued at $(date) for target $target. Checking again in 10 seconds."
+                sleep 10
+            fi
+        done
+
+        echo "Waiting for 30 seconds before submitting a new job for target $target."
+        sleep 30
+
+        sbatch scripts/eval_docking.sh $target
+        echo "New job for target $target submitted at $(date)."
+        ((counter++))
     done
 
-    # Wait for 90 seconds before submitting a new job
-    echo "Waiting for 90 seconds before submitting a new job."
-    sleep 90
-
-    # Submit a new job
-    sbatch scripts/eval_docking.sh
-    echo "New job submitted at $(date)."
-    ((counter++))  # Increment the counter
+    # Reset counter for next target
+    counter=0
 done

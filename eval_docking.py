@@ -41,6 +41,7 @@ def args_parser():
                         help='name of the trained config')
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--batch_size', default=32, type=int, help='batch size')
+    parser.add_argument('--cut_off', default=None, type=int, help='read file until this index')
     parser.add_argument('--preprocess_num_jobs', default=8, type=int, help='preprocess_num_jobs')
     parser.add_argument('--target', default='fa7', type=str, help='task to filter for')
     args = parser.parse_args()
@@ -73,6 +74,7 @@ def save_df(df, file_path, indices, target_column, new_values):
     # Save the new DataFrame to the new file
     update_df.to_csv(new_file_path)
     print(f"Saved updated indices {indices} to {new_file_path}")
+    return update_df
 
 def entrypoint(args):
     # Initialize setup
@@ -123,13 +125,14 @@ def entrypoint(args):
         st = time.time()
         new_smiles_scores = target.predict(docking_metrics['SMILES'][last_index:last_index + args.batch_size])
         print(f'finish docking in {time.time() - st} seconds')
-        save_df(docking_metrics, save_path, range(last_index, last_index + args.batch_size), args.target, new_smiles_scores)
+        update_df = save_df(docking_metrics, save_path, range(last_index, last_index + args.batch_size), args.target, new_smiles_scores)
     except:
         docking_metrics.loc[last_index + args.batch_size, args.target] = 0
         save_df_safe(docking_metrics, save_path)
+        update_df = docking_metrics
         print('FAILED')
 
-    negative_values = docking_metrics[args.target][docking_metrics[args.target] < 0]
+    negative_values = update_df[args.target][update_df[args.target] < 0]
     res_ = negative_values.nsmallest(int(0.05 * len(negative_values))).mean()
     print(f'Average top 5% of {args.target}: {res_}')
     target.__del__()

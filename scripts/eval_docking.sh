@@ -12,5 +12,5 @@ source ~/anaconda3/bin/activate
 conda activate my-rdkit-env
 export HF_HOME=$SCRATCH/hf_home
 
-python eval_docking.py --preprocess_num_jobs 8 --config_name train_ZINC_270M_atomwise --batch_size 4096 --target fa7
+python eval_docking.py --preprocess_num_jobs 8 --config_name train_ZINC_270M_atomwise --batch_size 4096 --target $1
 conda deactivate
