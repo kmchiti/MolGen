@@ -1,13 +1,18 @@
 #!/bin/bash
 
 # List of targets to run experiments on
-targets=('fa7' 'parp1' '5ht1b' 'jak2' 'braf')
+targets=('parp1' '5ht1b' 'jak2' 'braf')
 
 # Specify the batch size
 batch_size=1024
 
 # Initialize a counter
 start_index=0
+
+target='fa7'
+echo "Submitting job for target $target with batch size $batch_size and start index $start_index"
+sbatch scripts/eval_docking.sh $target $batch_size $start_index
+echo "Job for target $target submitted at $(date)."
 
 # Loop through each target and submit a job with the given batch size
 for target in "${targets[@]}"; do
