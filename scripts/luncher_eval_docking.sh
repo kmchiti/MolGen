@@ -2,10 +2,12 @@
 
 # Initialize a counter
 counter=0
-max_submissions=6
+max_submissions=7
 
+# Submit the first job
 sbatch scripts/eval_docking.sh
-sleep 90
+echo "First job submitted at $(date)."
+((counter++))  # Increment the counter
 
 while true; do
     # Check if counter has reached the limit
@@ -13,6 +15,9 @@ while true; do
         echo "Maximum number of submissions ($max_submissions) reached. No more jobs will be submitted."
         break  # Exit the loop
     fi
+
+    # Wait for 90 seconds before checking job statuses
+    sleep 90
 
     # Get all jobs for the user and their statuses
     job_statuses=$(squeue -u kamran.chitsaz | awk 'NR>1 {print $5}')  # Skip the header line and get only the status column
@@ -29,7 +34,4 @@ while true; do
     else
         echo "Not all jobs are running or no jobs are currently queued at $(date). No new job submitted."
     fi
-
-    # Wait for 90 seconds before checking again
-    sleep 90
 done
