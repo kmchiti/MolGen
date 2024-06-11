@@ -2,7 +2,10 @@
 
 # Initialize a counter
 counter=0
-max_submissions=7
+max_submissions=6
+
+sbatch scripts/eval_docking.sh
+sleep 90
 
 while true; do
     # Check if counter has reached the limit
@@ -27,6 +30,6 @@ while true; do
         echo "Not all jobs are running or no jobs are currently queued at $(date). No new job submitted."
     fi
 
-    # Wait for 60 seconds before checking again
-    sleep 60
+    # Wait for 90 seconds before checking again
+    sleep 90
 done
