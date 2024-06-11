@@ -47,21 +47,32 @@ def args_parser():
     return args
 
 
-def read_df(file_path):
+def read_df_safe(file_path):
     with open(file_path, 'r') as file:
         portalocker.lock(file, portalocker.LOCK_SH)  # Shared lock for reading
         df = pd.read_csv(file, index_col=0)
         portalocker.unlock(file)
         return df
 
-
-def save_df(df, file_path):
+def save_df_safe(df, file_path):
     with open(file_path, 'r+') as file:
         portalocker.lock(file, portalocker.LOCK_EX)  # Exclusive lock for writing
         file.seek(0)
         df.to_csv(file)
         file.truncate()  # Important to truncate in case new file is shorter
         portalocker.unlock(file)
+
+def save_df(df, file_path, indices, target_column, new_values):
+    # Create a new DataFrame for the specific indices
+    update_df = df.loc[indices, [target_column]].copy()
+    update_df[target_column] = new_values
+
+    # Construct the new file name
+    new_file_path = f"{file_path}_{target_column}_{indices[-1]}"
+
+    # Save the new DataFrame to the new file
+    update_df.to_csv(new_file_path)
+    print(f"Saved updated indices {indices} to {new_file_path}")
 
 
 def average_of_lowest_negatives(column):
@@ -84,7 +95,7 @@ def entrypoint(args):
     save_path = os.path.join(output_dir, DOCKING_SCORE_RESULT_PATH)
     if os.path.exists(save_path):
         print(f'load generated smiles from {save_path}')
-        docking_metrics = read_df(save_path)
+        docking_metrics = read_df_safe(save_path)
     else:
         print(f"select valid and unique molecules and save in {save_path}")
         df = pd.read_csv(os.path.join(output_dir, 'generated_smiles_42.csv'), index_col=0)
@@ -110,7 +121,7 @@ def entrypoint(args):
 
     print(f"start compute metric for target {args.target} from {last_index} to {last_index + args.batch_size}")
     docking_metrics.loc[last_index + args.batch_size, args.target] = 1000
-    save_df(docking_metrics, save_path)
+    save_df_safe(docking_metrics, save_path)
 
     docking_cfg = DockingConfig(target_name=args.target, num_sub_proc=args.preprocess_num_jobs,
                                 num_cpu_dock=1, seed=args.seed)
@@ -120,11 +131,10 @@ def entrypoint(args):
         st = time.time()
         new_smiles_scores = target.predict(docking_metrics['SMILES'][last_index:last_index + args.batch_size])
         print(f'finish docking in {time.time() - st} seconds')
-        docking_metrics.loc[last_index:last_index + args.batch_size - 1, args.target] = new_smiles_scores
-        save_df(docking_metrics, save_path)
+        save_df(docking_metrics, save_path, range(last_index, last_index + args.batch_size), args.target, new_smiles_scores)
     except:
         docking_metrics.loc[last_index + args.batch_size, args.target] = 0
-        save_df(docking_metrics, save_path)
+        save_df_safe(docking_metrics, save_path)
         print('FAILED')
 
     negative_values = docking_metrics[args.target][docking_metrics[args.target] < 0]

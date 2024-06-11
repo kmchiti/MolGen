@@ -16,22 +16,30 @@ while true; do
         break  # Exit the loop
     fi
 
-    # Wait for 90 seconds before checking job statuses
+    # Wait until all jobs are running
+    while true; do
+        # Get all jobs for the user and their statuses
+        job_statuses=$(squeue -u kamran.chitsaz | awk 'NR>1 {print $5}')  # Skip the header line and get only the status column
+
+        # Count the number of jobs that are not running
+        non_running_jobs=$(echo "$job_statuses" | grep -vc 'R')
+
+        # Check if there are no non-running jobs and at least one job exists
+        if [[ "$non_running_jobs" -eq 0 ]] && [[ ! -z "$job_statuses" ]]; then
+            echo "All jobs are running at $(date)."
+            break
+        else
+            echo "Not all jobs are running or no jobs are currently queued at $(date). Checking again in 10 seconds."
+            sleep 10
+        fi
+    done
+
+    # Wait for 90 seconds before submitting a new job
+    echo "Waiting for 90 seconds before submitting a new job."
     sleep 90
 
-    # Get all jobs for the user and their statuses
-    job_statuses=$(squeue -u kamran.chitsaz | awk 'NR>1 {print $5}')  # Skip the header line and get only the status column
-
-    # Count the number of jobs that are not running
-    non_running_jobs=$(echo "$job_statuses" | grep -vc 'R')
-
-    # Check if there are no non-running jobs and at least one job exists
-    if [[ "$non_running_jobs" -eq 0 ]] && [[ ! -z "$job_statuses" ]]; then
-        # All jobs are running, submit a new job
-        sbatch scripts/eval_docking.sh
-        echo "All jobs are running. New job submitted at $(date)."
-        ((counter++))  # Increment the counter
-    else
-        echo "Not all jobs are running or no jobs are currently queued at $(date). No new job submitted."
-    fi
+    # Submit a new job
+    sbatch scripts/eval_docking.sh
+    echo "New job submitted at $(date)."
+    ((counter++))  # Increment the counter
 done
