@@ -15,19 +15,17 @@ import signal
 import sys
 
 DOCKING_SCORE_RESULT_PATH = 'docking_scores.csv'
-# Global variables to be used in signal handler
-docking_metrics = None
-last_index = None
-args = None
-save_path = None
+
 
 def handle_sigterm(signum, frame):
     print("SIGTERM received. Saving state and exiting...")
     print('FAILED')
     sys.exit(0)
 
+
 # Register the signal handler
 signal.signal(signal.SIGTERM, handle_sigterm)
+
 
 def args_parser():
     parser = argparse.ArgumentParser(
@@ -44,6 +42,7 @@ def args_parser():
     args = parser.parse_args()
     return args
 
+
 def read_df_safe(file_path):
     with open(file_path, 'r') as file:
         portalocker.lock(file, portalocker.LOCK_SH)  # Shared lock for reading
@@ -51,17 +50,10 @@ def read_df_safe(file_path):
         portalocker.unlock(file)
         return df
 
-def save_df_safe(df, file_path):
-    with open(file_path, 'r+') as file:
-        portalocker.lock(file, portalocker.LOCK_EX)  # Exclusive lock for writing
-        file.seek(0)
-        df.to_csv(file)
-        file.truncate()  # Important to truncate in case new file is shorter
-        portalocker.unlock(file)
 
 def save_df(df, file_path, indices, target_column, new_values):
     # Create a new DataFrame for the specific indices
-    update_df = df.loc[indices, [target_column]].copy()
+    update_df = df.loc[indices].copy()
     update_df[target_column] = new_values
 
     # Construct the new file name
@@ -101,11 +93,6 @@ def entrypoint(args):
         # select unique and valid molecules
         new_smiles = list(set(smiles) - {None})
         docking_metrics['SMILES'] = np.array(new_smiles)
-        docking_metrics['fa7'] = np.zeros(len(new_smiles))
-        docking_metrics['parp1'] = np.zeros(len(new_smiles))
-        docking_metrics['5ht1b'] = np.zeros(len(new_smiles))
-        docking_metrics['jak2'] = np.zeros(len(new_smiles))
-        docking_metrics['braf'] = np.zeros(len(new_smiles))
         docking_metrics.to_csv(save_path)
 
     print(
@@ -114,18 +101,21 @@ def entrypoint(args):
                                 num_cpu_dock=1, seed=args.seed)
     target = DockingVina(docking_cfg)
 
+    st = time.time()
+
     try:
-        st = time.time()
         new_smiles_scores = target.predict(
             docking_metrics['SMILES'][args.start_index:args.start_index + args.batch_size])
-        print(f'finish docking in {time.time() - st} seconds')
-        update_df = save_df(docking_metrics, save_path, range(args.start_index, args.start_index + args.batch_size),
-                            args.target, new_smiles_scores)
-        negative_values = update_df[args.target][update_df[args.target] < 0]
-        res_ = negative_values.nsmallest(int(0.05 * len(negative_values))).mean()
-        print(f'Average top 5% of {args.target}: {res_}')
-    except:
-        print('FAILED')
+    except Exception as e:
+        print(f'FAILED: {str(e)}')
+        sys.exit(1)
+
+    print(f'finish docking in {time.time() - st} seconds')
+    update_df = save_df(docking_metrics, save_path, range(args.start_index, args.start_index + args.batch_size),
+                        args.target, new_smiles_scores)
+    negative_values = update_df[args.target][update_df[args.target] < 0]
+    res_ = negative_values.nsmallest(int(0.05 * len(negative_values))).mean()
+    print(f'Average top 5% of {args.target}: {res_}')
 
     target.__del__()
 
