@@ -23,12 +23,8 @@ save_path = None
 
 def handle_sigterm(signum, frame):
     print("SIGTERM received. Saving state and exiting...")
-    if docking_metrics is not None and last_index is not None and args is not None and save_path is not None:
-        docking_metrics.loc[last_index + args.batch_size, args.target] = 0
-        save_df(docking_metrics, save_path)
-        print('FAILED')
+    print('FAILED')
     sys.exit(0)
-
 
 # Register the signal handler
 signal.signal(signal.SIGTERM, handle_sigterm)
@@ -39,14 +35,14 @@ def args_parser():
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--config_name', default="train_ZINC_270M_atomwise", type=str,
                         help='name of the trained config')
+    parser.add_argument('--ckpt', type=str, default=None)
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--batch_size', default=32, type=int, help='batch size')
-    parser.add_argument('--cut_off', default=None, type=int, help='read file until this index')
+    parser.add_argument('--start_index', default=0, type=int, help='start index to compute metrics')
     parser.add_argument('--preprocess_num_jobs', default=8, type=int, help='preprocess_num_jobs')
     parser.add_argument('--target', default='fa7', type=str, help='task to filter for')
     args = parser.parse_args()
     return args
-
 
 def read_df_safe(file_path):
     with open(file_path, 'r') as file:
@@ -76,13 +72,18 @@ def save_df(df, file_path, indices, target_column, new_values):
     print(f"Saved updated indices {indices} to {new_file_path}")
     return update_df
 
+
 def entrypoint(args):
     # Initialize setup
     with initialize(version_base=None, config_path="configs"):
         cfg = compose(config_name=args.config_name)
 
     exp_name = creat_unique_experiment_name(cfg)
-    output_dir = os.path.join(cfg.save_path, exp_name)
+    if args.ckpt is None:
+        output_dir = os.path.join(cfg.save_path, exp_name)
+    else:
+        output_dir = os.path.join(cfg.save_path, exp_name, args.ckpt)
+
     if not os.path.exists(output_dir):
         raise f"cannot find the experiment in {output_dir}"
 
@@ -107,34 +108,25 @@ def entrypoint(args):
         docking_metrics['braf'] = np.zeros(len(new_smiles))
         docking_metrics.to_csv(save_path)
 
-    indices = np.where(docking_metrics[args.target] == 1000)[0]
-    if indices.size > 0:
-        last_index = indices[-1]
-    else:
-        last_index = 0
-
-    print(f"start compute metric for target {args.target} from {last_index} to {last_index + args.batch_size}")
-    docking_metrics.loc[last_index + args.batch_size, args.target] = 1000
-    save_df_safe(docking_metrics, save_path)
-
+    print(
+        f"start compute metric for target {args.target} from {args.start_index} to {args.start_index + args.batch_size}")
     docking_cfg = DockingConfig(target_name=args.target, num_sub_proc=args.preprocess_num_jobs,
                                 num_cpu_dock=1, seed=args.seed)
     target = DockingVina(docking_cfg)
 
     try:
         st = time.time()
-        new_smiles_scores = target.predict(docking_metrics['SMILES'][last_index:last_index + args.batch_size])
+        new_smiles_scores = target.predict(
+            docking_metrics['SMILES'][args.start_index:args.start_index + args.batch_size])
         print(f'finish docking in {time.time() - st} seconds')
-        update_df = save_df(docking_metrics, save_path, range(last_index, last_index + args.batch_size), args.target, new_smiles_scores)
+        update_df = save_df(docking_metrics, save_path, range(args.start_index, args.start_index + args.batch_size),
+                            args.target, new_smiles_scores)
+        negative_values = update_df[args.target][update_df[args.target] < 0]
+        res_ = negative_values.nsmallest(int(0.05 * len(negative_values))).mean()
+        print(f'Average top 5% of {args.target}: {res_}')
     except:
-        docking_metrics.loc[last_index + args.batch_size, args.target] = 0
-        save_df_safe(docking_metrics, save_path)
-        update_df = docking_metrics
         print('FAILED')
 
-    negative_values = update_df[args.target][update_df[args.target] < 0]
-    res_ = negative_values.nsmallest(int(0.05 * len(negative_values))).mean()
-    print(f'Average top 5% of {args.target}: {res_}')
     target.__del__()
 
 

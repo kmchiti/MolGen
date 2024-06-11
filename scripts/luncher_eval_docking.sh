@@ -4,14 +4,19 @@
 counter=0
 max_submissions=7
 
+# Specify the batch size
+batch_size=4096
+
 # List of targets to iterate over
 targets=('fa7' 'parp1' '5ht1b' 'jak2' 'braf')
 
 # Loop through each target and submit a job
 for target in "${targets[@]}"; do
-    # Submit the first job for the current target
-    sbatch scripts/eval_docking.sh $target
-    echo "First job for target $target submitted at $(date)."
+    # Calculate start index
+    start_index=$((counter * batch_size))
+    echo "Submitting job for target $target with batch size $batch_size and start index $start_index"
+    sbatch scripts/eval_docking.sh $target $batch_size $start_index
+    echo "Job for target $target submitted at $(date)."
     ((counter++))  # Increment the counter
 
     while true; do
@@ -38,8 +43,12 @@ for target in "${targets[@]}"; do
         echo "Waiting for 30 seconds before submitting a new job for target $target."
         sleep 30
 
-        sbatch scripts/eval_docking.sh $target
-        echo "New job for target $target submitted at $(date)."
+        # Calculate start index
+        start_index=$((counter * batch_size))
+        echo "Submitting job for target $target with batch size $batch_size and start index $start_index"
+        sbatch scripts/eval_docking.sh $target $batch_size $start_index
+        echo "Job for target $target submitted at $(date)."
+
         ((counter++))
     done
 
