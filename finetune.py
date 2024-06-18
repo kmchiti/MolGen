@@ -26,7 +26,7 @@ def args_parser():
                         help='name of the trained config')
     parser.add_argument('--config_name', default="finetune_ZINC_270M_atomwise", type=str,
                         help='name of the trained config')
-    parser.add_argument('--task', default='qed', type=str, help='task to filter for')
+    parser.add_argument('--task', default='fa7', type=str, help='task to filter for')
     args = parser.parse_args()
     return args
 
@@ -42,9 +42,15 @@ def entrypoint(args):
     os.makedirs(output_dir, exist_ok=True)
 
     # Initialize DataModule
+    cfg.dataset.dataset_name = "MolGen/ZINC_270M-raw"
     datamodule = MolGenDataModule(**cfg.dataset)
     datamodule.setup()
-    df = pd.read_csv(f'{output_dir}/generated_smiles_qed_42.csv')
+
+    # df = pd.read_csv(f'{output_dir}/generated_smiles_qed_42.csv')
+    # dataset = Dataset.from_dict(df)
+    # dataset = DatasetDict({"train": dataset})
+    df = pd.read_csv(f'{output_dir}/docking_scores/{args.task}_top10.csv', index_col=0)
+    df.pop(args.task)
     dataset = Dataset.from_dict(df)
     dataset = DatasetDict({"train": dataset})
 
@@ -156,8 +162,8 @@ def entrypoint(args):
 
     # Save the SMILES to a CSV file
     df = pd.DataFrame(generated_smiles, columns=["SMILES"])
-    pandarallel.initialize(shm_size_mb=60720, nb_workers=args.preprocess_num_jobs, progress_bar=True)
-    df['qed'] = df['SMILES'].parallel_apply(get_qed)
+    # pandarallel.initialize(shm_size_mb=60720, nb_workers=args.preprocess_num_jobs, progress_bar=True)
+    # df['qed'] = df['SMILES'].parallel_apply(get_qed)
     df.to_csv(os.path.join(output_dir_, 'generated_smiles.csv'), index=False)
 
 

@@ -1,4 +1,4 @@
-n_samples: 30000
+n_samples: 4096
 prompt: "CC"
 temperature: 1.0
 top_k: 50

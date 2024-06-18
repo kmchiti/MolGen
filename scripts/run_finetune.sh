@@ -15,5 +15,5 @@ export HF_HOME=$SCRATCH/hf_home
 
 # wandb login --relogin 73fd65ff1623ce64c1f20ed621c065ec55d7eaa3
 
-python finetune.py --exp_name=llama_small_FA_ZINC_270M_3d67f607_ --config_name=finetune_ZINC_270M_atomwise --task qed
+python finetune.py --exp_name=llama_small_FA_ZINC_270M_3d67f607_ --config_name=finetune_ZINC_270M_atomwise --task fa7
 conda deactivate

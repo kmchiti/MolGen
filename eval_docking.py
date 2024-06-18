@@ -13,6 +13,7 @@ import time
 import portalocker
 import signal
 import sys
+import re
 
 DOCKING_SCORE_RESULT_PATH = 'docking_scores/docking_scores.csv'
 
@@ -64,6 +65,52 @@ def save_df(df, file_path, indices, target_column, new_values):
     print(f"Saved updated indices {indices} to {new_file_path}")
     return update_df
 
+
+def read_and_merge_files(output_dir, target):
+    # Pattern to match filenames
+    pattern = re.compile(rf'docking_scores_{target}_(\d+)\.csv')
+
+    # Function to extract integer from filename
+    def extract_number(filename):
+        match = re.search(rf'docking_scores_{target}_(\d+)\.csv', filename)
+        return int(match.group(1)) if match else float('inf')
+
+    # List to hold DataFrames
+    df_list = []
+
+    # Get all files and sort by extracted number
+    files = os.listdir(output_dir)
+    sorted_files = sorted(files, key=extract_number)
+
+    # Iterate over sorted filenames
+    for filename in sorted_files:
+        if pattern.match(filename):
+            # Construct full file path
+            file_path = os.path.join(output_dir, filename)
+            # Read the DataFrame
+            df = pd.read_csv(file_path, index_col=0)
+            # Append to the list of DataFrames
+            df_list.append(df)
+
+    # Concatenate all DataFrames
+    merged_df = pd.concat(df_list, ignore_index=True)
+
+    merged_df.to_csv(os.path.join(output_dir, f'{target}_final.csv'))
+
+    return merged_df
+
+
+def save_all_results(output_dir):
+    targets = ['fa7', 'parp1', '5ht1b', 'jak2', 'braf']
+    merged_table = pd.DataFrame()
+    for target in targets:
+        df = read_and_merge_files(output_dir, target)
+        if merged_table.empty:
+            merged_table = df
+        else:
+            merged_table = pd.merge(merged_table, df, on='SMILES', how='outer')
+
+    merged_table.to_csv(os.path.join(output_dir, f'docking_scores_final.csv'))
 
 def entrypoint(args):
     # Initialize setup
