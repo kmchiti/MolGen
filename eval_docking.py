@@ -14,7 +14,7 @@ import portalocker
 import signal
 import sys
 
-DOCKING_SCORE_RESULT_PATH = 'docking_scores.csv'
+DOCKING_SCORE_RESULT_PATH = 'docking_scores/docking_scores.csv'
 
 
 def handle_sigterm(signum, frame):
@@ -84,6 +84,7 @@ def entrypoint(args):
         print(f'load generated smiles from {save_path}')
         docking_metrics = read_df_safe(save_path)
     else:
+        os.makedirs(os.path.join(output_dir, 'docking_scores'), exist_ok=True)
         print(f"select valid and unique molecules and save in {save_path}")
         df = pd.read_csv(os.path.join(output_dir, 'generated_smiles_42.csv'))
         docking_metrics = pd.DataFrame()

@@ -165,7 +165,8 @@ def entrypoint(args):
                 final_df.to_csv(os.path.join(output_dir, f'generated_smiles_{args.task}_{seed}.csv'), index=False)
             else:
                 print('*********** No metrics were calculated ***********')
-                final_df.to_csv(os.path.join(output_dir, f'generated_smiles_NA_{seed}.csv'), index=False)
+                final_df = pd.concat([final_df, df])
+                final_df.to_csv(os.path.join(output_dir, f'generated_smiles_{seed}.csv'), index=False)
 
 
 if __name__ == "__main__":

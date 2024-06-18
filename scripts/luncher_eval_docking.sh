@@ -1,8 +1,13 @@
 #!/bin/bash
+#SBATCH --job-name=launcher
+#SBATCH --time=0-09:00
+
+#SBATCH --partition=unkillable-cpu    # ask for unkillable job
+#SBATCH --cpus-per-task=1              # number of cpus per gpu
 
 # Initialize a counter
 counter=0
-max_submissions=7
+max_submissions=23
 
 # Specify the batch size
 batch_size=4096
