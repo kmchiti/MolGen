@@ -85,7 +85,7 @@ def entrypoint(args):
         docking_metrics = read_df_safe(save_path)
     else:
         print(f"select valid and unique molecules and save in {save_path}")
-        df = pd.read_csv(os.path.join(output_dir, 'generated_smiles_42.csv'), index_col=0)
+        df = pd.read_csv(os.path.join(output_dir, 'generated_smiles_42.csv'))
         docking_metrics = pd.DataFrame()
         disable_rdkit_log()
         # remove invalid molecules

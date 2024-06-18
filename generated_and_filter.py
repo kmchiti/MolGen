@@ -30,9 +30,9 @@ def args_parser():
                         help='name of the trained config')
     parser.add_argument('--seeds', nargs='+', type=int, default=[42],
                         help='list of seed integers for random number generation')
-    parser.add_argument('--num_samples', default=30000, type=int, help='number of samples to generate')
+    parser.add_argument('--num_samples', default=10000, type=int, help='number of samples to generate')
     parser.add_argument('--total_samples', default=500000, type=int, help='number of total samples to generate and filter')
-    parser.add_argument('--batch_size', default=1024, type=int, help='batch size')
+    parser.add_argument('--batch_size', default=1000, type=int, help='batch size')
     parser.add_argument('--top_k', default=50, type=int, help='top_k')
     parser.add_argument('--top_p', default=0.95, type=float, help='top_p')
     parser.add_argument('--temperature', default=1.0, type=float, help='temperature')
@@ -63,9 +63,8 @@ def entrypoint(args):
 
     # Initialize setup
     exp_name = creat_unique_experiment_name(cfg)
-    # output_dir = os.path.join(cfg.save_path, exp_name)
-    output_dir = './save/llama_small_FA_ZINC_270M_3d67f607_'
-    os.makedirs(output_dir, exist_ok=True)
+    output_dir = os.path.join(cfg.save_path, exp_name)
+    # output_dir = './save/llama_small_FA_ZINC_270M_3d67f607_'
 
     # Initialize DataModule
     datamodule = MolGenDataModule(**cfg.dataset)
@@ -150,21 +149,23 @@ def entrypoint(args):
                 pandarallel.initialize(shm_size_mb=60720, nb_workers=args.preprocess_num_jobs, progress_bar=True)
                 df['qed'] = df['SMILES'].parallel_apply(get_qed)
                 filtered_df = df[df['qed'] > 0.9]
+                final_df = pd.concat([final_df, filtered_df])
+                final_df.to_csv(os.path.join(output_dir, f'generated_smiles_{args.task}_{seed}.csv'), index=False)
             elif args.task == 'logp':
                 pandarallel.initialize(shm_size_mb=60720, nb_workers=args.preprocess_num_jobs, progress_bar=True)
                 df['logP'] = df['SMILES'].parallel_apply(get_logp)
                 filtered_df = df[df['logP'] > 3.0]
+                final_df = pd.concat([final_df, filtered_df])
+                final_df.to_csv(os.path.join(output_dir, f'generated_smiles_{args.task}_{seed}.csv'), index=False)
             elif args.task == 'SA':
                 pandarallel.initialize(shm_size_mb=60720, nb_workers=args.preprocess_num_jobs, progress_bar=True)
                 df['SA'] = df['SMILES'].parallel_apply(get_sa)
                 filtered_df = df[df['SA'] > 4.0]
+                final_df = pd.concat([final_df, filtered_df])
+                final_df.to_csv(os.path.join(output_dir, f'generated_smiles_{args.task}_{seed}.csv'), index=False)
             else:
-                raise NotImplementedError
-
-            final_df = pd.concat([final_df, filtered_df])
-
-        # Save the SMILES to a CSV file
-        final_df.to_csv(os.path.join(output_dir, f'generated_smiles_{args.task}_{seed}.csv'), index=False)
+                print('*********** No metrics were calculated ***********')
+                final_df.to_csv(os.path.join(output_dir, f'generated_smiles_NA_{seed}.csv'), index=False)
 
 
 if __name__ == "__main__":
