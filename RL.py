@@ -52,7 +52,7 @@ def top_auc(buffer, top_n, finish, env_log_interval, max_oracle_calls):
 
 
 class BaseOptimizer:
-    def __init__(self, target_name='fa7', max_oracle_calls=1000, env_log_interval=100, wandb_log=False):
+    def __init__(self, target_name='fa7', max_oracle_calls=10000, env_log_interval=100, wandb_log=False):
         self.target_name = target_name
         # defining target oracles
         self.assign_target(task='docking')
@@ -623,12 +623,12 @@ class reinforce_optimizer(BaseOptimizer):
             raise NotImplementedError
 
         if self.ckpt is None:
-            checkpoint = torch.load(os.path.join(output_dir, 'pytorch_model.bin'), map_location='cpu')
+            checkpoint_path = os.path.join(output_dir, 'pytorch_model.bin')
         else:
-            checkpoint = torch.load(os.path.join(output_dir, f'tmp-spec-checkpoint-{self.ckpt}', 'pytorch_model.bin'),
-                                    map_location='cpu')
+            checkpoint_path = os.path.join(output_dir, f'tmp-spec-checkpoint-{self.ckpt}', 'pytorch_model.bin')
+        checkpoint = torch.load(checkpoint_path, map_location='cpu')
         model.load_state_dict(checkpoint)
-        print(f'***************** load checkpoint from {checkpoint} *****************')
+        print(f'***************** load checkpoint from {checkpoint_path} *****************')
 
         #################################################################
 
@@ -670,7 +670,7 @@ class reinforce_optimizer(BaseOptimizer):
         # Calculate gradients and make an update to the network weights
         self.optimizer.zero_grad()
         loss.backward()
-        grad_norm = torch.nn.utils.clip_grad_norm_(self.agent.parameters(), 0.5)
+        grad_norm = torch.nn.utils.clip_grad_norm_(self.agent.model.parameters(), 0.5)
         self.optimizer.step()
 
         alpha_loss = (
@@ -705,21 +705,11 @@ class reinforce_optimizer(BaseOptimizer):
         metrics = dict()
         print("Start training ... ")
         while eval_strings < max_strings:
-
             with torch.no_grad():
                 # sample experience
                 obs, rewards, nonterms, episode_lens = self.agent.get_data(
                     batch_size, max_len
                 )
-
-            # smiles_list = []
-            # output = self.agent.tokenizer.batch_decode(obs.T, skip_special_tokens=True)
-            # smiles_list += [s.replace(" ", "") for s in output]
-            # metrics = dict()
-            # scores = get_reward(smiles_list)
-            # metrics["docking"] = scores[scores<0].mean()
-            # scores[scores==99.9] = 0
-            # scores = (scores/-20).unsqueeze(0)
 
             smiles_list = []
             output = self.agent.tokenizer.batch_decode(obs.T, skip_special_tokens=True)
@@ -748,11 +738,23 @@ class reinforce_optimizer(BaseOptimizer):
             print(metrics)
 
             rewards = rewards * scores
-            self.update(obs, rewards, nonterms, episode_lens, metrics, log=False)
-            if eval_strings % 5000 == 0:
-                state_dict = self.agent.model.state_dict()
-                # TODO: task and target here
-                torch.save(state_dict, os.path.join(self.output_dir, "pytorch_model_reinforce_{eval_strings}.bin"))
+            self.update(obs, rewards, nonterms, episode_lens, metrics, log=self.wandb_log)
+
+            if train_steps % 50 == 0:
+                output_dir = os.path.join(self.output_dir, f"reinforce_{self.target_name}")
+                os.makedirs(output_dir, exist_ok=True)
+
+                checkpoint = {
+                    'eval_strings': eval_strings,
+                    'model_state_dict': self.agent.model.state_dict(),
+                    'optimizer_state_dict': self.optimizer.state_dict(),
+                    'a_optimizer_dict': self.a_optimizer.state_dict(),
+                    'log_alpha': self.log_alpha,
+                }
+
+                check_path = os.path.join(output_dir, f"pytorch_model_{eval_strings}.tar")
+                print(f'=============== save checkpoint in {check_path} ===============')
+                torch.save(checkpoint, check_path)
 
         print("max training string hit")
         # wandb.finish()
@@ -768,8 +770,9 @@ def args_parser():
     parser.add_argument('--ckpt', type=str, default=None)
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--batch_size', default=96, type=int, help='batch size')
-    parser.add_argument('--max_strings', default=20000, type=int, help='batch size')
+    parser.add_argument('--max_strings', default=40000, type=int, help='batch size')
     parser.add_argument('--target', default='fa7', type=str, help='task to filter for')
+    parser.add_argument('--wandb', action='store_true', help='use wandb for logging')
     args = parser.parse_args()
     return args
 
@@ -779,5 +782,15 @@ if __name__ == "__main__":
     args = args_parser()
     set_seed(args.seed)
 
-    optim = reinforce_optimizer(config_name=args.config_name, ckpt=args.ckpt)
+    if args.wandb:
+        with initialize(version_base=None, config_path="configs"):
+            cfg = compose(config_name=args.config_name)
+        exp_name = creat_unique_experiment_name(cfg)
+        wandb.init(entity='drug-discovery', project='small-molecule-generation',
+                   name=f'reinforce_{exp_name}_{args.target}',
+                   config={'lr': 1e-4})
+
+    optim = reinforce_optimizer(config_name=args.config_name, ckpt=args.ckpt,
+                                target_name=args.target, max_oracle_calls=10000,
+                                env_log_interval=96, wandb_log=args.wandb)
     optim.optimize(max_strings=args.max_strings, batch_size=args.batch_size, max_len=64)
