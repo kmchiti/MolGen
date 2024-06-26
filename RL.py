@@ -22,7 +22,6 @@ import torch.nn.functional as F
 import torch.distributions as td
 
 
-
 def top_auc(buffer, top_n, finish, env_log_interval, max_oracle_calls):
     sum = 0
     prev = 0
@@ -96,9 +95,8 @@ class BaseOptimizer:
     def assign_target(self, task='docking'):
         if task == "docking":
 
-            docking_cfg = DockingConfig(target_name=self.target_name, num_sub_proc=24,
-                                        num_cpu_dock=1, seed=42)
-            self.target = DockingVina(docking_cfg)
+            self.docking_cfg = DockingConfig(target_name=self.target_name, num_sub_proc=24,
+                                             num_cpu_dock=1, seed=42)
             self.predict = self.predict_docking
 
         elif task == "augmented_docking":
@@ -258,6 +256,7 @@ class BaseOptimizer:
         """
         Score
         """
+        self.target = DockingVina(self.docking_cfg)
         st = time.time()
         assert isinstance(smiles_list, list)
         self.total_count += len(smiles_list)
@@ -295,6 +294,7 @@ class BaseOptimizer:
 
         self.last_logging_time = time.time() - st
         self.mean_score = np.mean(score_list)
+        self.target.__del__()
         return score_list
 
     def optimize(self, cfg):
@@ -548,6 +548,8 @@ class LlamaPolicy(object):
         end_flags = torch.zeros((1, batch_size), dtype=torch.bool, device=self.device)
 
         for i in range(1, max_length + 1):
+            if i == max_length:
+                continue
             preds = obs[i]
             nonterms[i - 1] = ~end_flags
 
