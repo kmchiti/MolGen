@@ -548,8 +548,6 @@ class LlamaPolicy(object):
         end_flags = torch.zeros((1, batch_size), dtype=torch.bool, device=self.device)
 
         for i in range(1, max_length + 1):
-            if i == max_length:
-                continue
             preds = obs[i]
             nonterms[i - 1] = ~end_flags
 
