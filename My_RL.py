@@ -14,10 +14,9 @@ import torch.nn.functional as F
 
 import copy
 import time
+import sys
 from docking_score import DockingConfig, DockingVina
-from moses.metrics.utils import logP, QED, SA, weight, get_mol
-from moses.utils import mapper
-from multiprocessing import Pool
+import tdc
 
 
 def filter_tokens_after_eos(sequences, eos_id):
@@ -79,14 +78,8 @@ def get_reward(smiles, target='fa7', num_proc=24, seed=42, device=torch.device('
 
 
 def compute_chemical_prop(generated_smiles, n_jobs=1):
-    pool = Pool(n_jobs)
-    mols = mapper(pool)(get_mol, generated_smiles)
-
-    pool = Pool(n_jobs)
-    SA_scores = mapper(pool)(SA, mols)
-
-    pool = Pool(n_jobs)
-    QED_scores = mapper(pool)(QED, mols)
+    SA_scores = tdc.Oracle(name="SA")(generated_smiles)
+    QED_scores = tdc.Oracle(name="qed")(generated_smiles)
 
     return torch.tensor(SA_scores), torch.tensor(QED_scores)
 
@@ -169,7 +162,7 @@ if __name__ == "__main__":
     if args.wandb:
         wandb.init(entity='drug-discovery', project='small-molecule-generation',
                    name=f'reinforce_{exp_name}_{args.target}',
-                   config={'lr': 1e-4})
+                   config=args.__dict__)
 
     train(args.num_oracle, datamodule, model, optimizer, args.batch_size, args.num_proc,
           target=args.target, use_wandb=args.wandb)

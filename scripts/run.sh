@@ -16,6 +16,6 @@ export HF_HOME=$SCRATCH/hf_home
 # wandb login --relogin 73fd65ff1623ce64c1f20ed621c065ec55d7eaa3
 
 #python train.py --config-name=train_moses_gpt2
-python RL.py --max_strings 1000 --target braf --wandb
+python My_RL.py --batch_size 120 --target f17 --num_oracle 40000 --num_proc 24 --wandb
 
 conda deactivate
