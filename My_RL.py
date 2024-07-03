@@ -153,6 +153,7 @@ if __name__ == "__main__":
     model = Llama_small_flash_atten(**cfg.model, max_seq_length=datamodule.max_seq_length,
                                     vocab_size=datamodule.tokenizer.vocab_size)
 
+    print(f"load checkpoint from {os.path.join(output_dir, 'pytorch_model.bin')}")
     checkpoint = torch.load(os.path.join(output_dir, 'pytorch_model.bin'), map_location='cpu')
     model.load_state_dict(checkpoint)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
