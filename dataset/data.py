@@ -71,8 +71,9 @@ class MolGenDataModule(object):
             tokenizer=self.tokenizer, mlm=False
         )
         _tok_name = tokenizer_name if tokenizer_name is not None else tokenizer_path.split("tokenizers/")[1].split(".json")[0]
+        _dat_path = "MolGen___"+dataset_name.split("MolGen/")[1].lower()
         self.save_directory = os.path.join(os.environ["HF_HOME"],
-                                           f'datasets/{dataset_name.split("MolGen/")[1]}/tokenized_{_tok_name}')
+                                           f'datasets/{_dat_path}/tokenized_{_tok_name}')
         print(self.save_directory)
 
     def creat_tokenized_datasets(self):
