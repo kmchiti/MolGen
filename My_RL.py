@@ -103,8 +103,7 @@ def args_parser():
 
 
 def train(num_oracle, datamodule, model, optimizer, batch_size, num_proc, target='fa7', use_wandb=False):
-
-    for i in range(num_oracle//batch_size):
+    for i in range(num_oracle // batch_size):
         sequences, generated_smiles = generated_samples(model, datamodule.tokenizer,
                                                         batch_size=batch_size,
                                                         max_length=datamodule.max_seq_length)
@@ -117,7 +116,7 @@ def train(num_oracle, datamodule, model, optimizer, batch_size, num_proc, target
         reward = smiles_scores / (-20.)
 
         metrics = {'num_invalid': num_invalid, 'top_10': top_10, 'mean_reward': reward.mean().item(),
-                   'max_reward': reward.max().item(), 'num_oracles': i*batch_size,
+                   'max_reward': reward.max().item(), 'num_oracles': i * batch_size,
                    'SA_score': SA_scores.mean().item(), 'QED_score': QED_scores.mean().item()}
 
         logits = model(sequences).logits
@@ -125,10 +124,15 @@ def train(num_oracle, datamodule, model, optimizer, batch_size, num_proc, target
         # To create a cumulative mask that only marks positions after the first EOS
         shifted_mask = torch.cat([torch.zeros_like(mask[:, :1]), mask[:, :-1]], dim=1)
         nonterms = ~(shifted_mask.cumsum(dim=1) > 0)
+        nonterms[:, 0] = 0  # bos
 
-        selected_log_probs = F.log_softmax(logits, dim=-1) * nonterms.unsqueeze(-1)
-        reward = reward.unsqueeze(-1)  # Add dimension if necessary
-        policy_gradient = (reward.unsqueeze(-1) * selected_log_probs).sum(dim=1).mean()
+        log_probs = F.log_softmax(logits, dim=-1) * nonterms.unsqueeze(-1)
+        token_indexes = sequences.unsqueeze(-1)
+        selected_log_probs = torch.gather(log_probs, dim=2, index=token_indexes)
+        selected_log_probs = selected_log_probs.squeeze(-1)
+        molecule_log_prob = selected_log_probs.sum(dim=1)
+
+        policy_gradient = (reward * molecule_log_prob).mean()
 
         loss = -policy_gradient  # Negative for maximizing
         metrics['loss'] = loss.item()
