@@ -30,7 +30,7 @@ def entrypoint(cfg: DictConfig):
 
     # Initialize DataModule
     datamodule = MolGenDataModule(**cfg.dataset)
-    datamodule.setup()
+    datamodule.load_tokenized_dataset()
 
     # Initialize model
     if cfg.model.model_name_or_path == 'gpt2_flash_atten':

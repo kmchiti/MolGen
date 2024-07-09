@@ -157,7 +157,7 @@ class Llama_small_flash_atten(GPTLMHeadModel, ABC):
         return model
 
     def save_HF_model(self, tokenizer, output_dir: str, dataset_name: str = None,
-                      token=None):
+                      token=None, ckpt=None):
         from huggingface_hub import HfApi
 
         save_directory = os.path.join(output_dir, 'HF')
@@ -166,7 +166,10 @@ class Llama_small_flash_atten(GPTLMHeadModel, ABC):
 
         # Push to Hugging Face Hub
         api = HfApi()
-        upload_name = f'MolGen/Llama-small-{dataset_name}'
+        if ckpt is None:
+            upload_name = f'MolGen/Llama-small-{dataset_name}'
+        else:
+            upload_name = f'MolGen/Llama-small-{dataset_name}_{ckpt}'
         if not api.repo_exists('MolGen/llama_small_FA_ZINC_270M'):
             api.create_repo(repo_id=upload_name, token=token)
         api.upload_folder(

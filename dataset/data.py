@@ -1,6 +1,6 @@
 import warnings
 import os
-from datasets import Features, Value, load_dataset
+from datasets import Features, Value, load_dataset, load_from_disk
 from typing import Optional
 from torch.utils.data.dataloader import DataLoader
 from transformers import (
@@ -67,8 +67,15 @@ class MolGenDataModule(object):
             )
 
         self.tokenizer = tokenizer
+        self.data_collator = DataCollatorForLanguageModeling(
+            tokenizer=self.tokenizer, mlm=False
+        )
+        _tok_name = tokenizer_name if tokenizer_name is not None else tokenizer_path.split("tokenizers/")[1].split(".json")[0]
+        self.save_directory = os.path.join(os.environ["HF_HOME"],
+                                           f'datasets/{dataset_name.split("MolGen/")[1]}/tokenized_{_tok_name}')
+        print(self.save_directory)
 
-    def setup(self):
+    def creat_tokenized_datasets(self):
 
         # Load dataset
         dataset = load_dataset(self.dataset_name, num_proc=self.dataloader_num_workers)
@@ -115,12 +122,10 @@ class MolGenDataModule(object):
             },
         )
 
-        # Create train and validation datasets
-        self.train_dataset = tokenized_dataset["train"]
-        self.eval_dataset = tokenized_dataset["test"]
-        self.data_collator = DataCollatorForLanguageModeling(
-            tokenizer=self.tokenizer, mlm=False
-        )
+        tokenized_dataset.save_to_disk(self.save_directory)
+        print(f'tokenized dataset saved at: {self.save_directory}')
+
+        # # Create train and validation datasets
 
     def train_dataloader(self, batch_size: int = 1024,):
         return DataLoader(
@@ -138,6 +143,11 @@ class MolGenDataModule(object):
             collate_fn=self.data_collator,
             num_workers=self.dataloader_num_workers,
         )
+
+    def load_tokenized_dataset(self):
+        tokenized_dataset = load_from_disk(self.save_directory)
+        self.train_dataset = tokenized_dataset["train"]
+        self.eval_dataset = tokenized_dataset["test"]
 
     def get_maximum_length(self):
         import multiprocessing
