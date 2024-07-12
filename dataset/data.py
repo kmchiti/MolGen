@@ -86,10 +86,12 @@ class MolGenDataModule(object):
                                    num_proc=self.dataloader_num_workers)
         else:
             dataset = load_dataset(self.dataset_name, num_proc=self.dataloader_num_workers)
+        print('************ load done! ************')
 
         if 'test' not in dataset.keys():
             print('************ start splitting ************')
             dataset = dataset["train"].train_test_split(test_size=self.validation_size, seed=self.val_split_seed)
+            print('************ splitting done! ************')
 
         def tokenize_function(
             element: dict,
@@ -131,7 +133,7 @@ class MolGenDataModule(object):
                 "tokenizer": self.tokenizer,
             },
         )
-
+        print('************ save to disk ************')
         tokenized_dataset.save_to_disk(self.save_directory)
         print('************************')
         print(f'tokenized dataset saved at: {self.save_directory}')

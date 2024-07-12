@@ -3,7 +3,7 @@ tokenizer_path: "./data/processed/training/tokenizers/atomwise_ZINC_270M_SMILES_
 mol_type: "SMILES"
 overwrite_cache: false
 max_seq_length: 64
-dataloader_num_workers: 48
-preprocess_num_workers: 48
-validation_size: 0.001
+dataloader_num_workers: 8
+preprocess_num_workers: 8
+validation_size: 0.0001
 val_split_seed: 42
