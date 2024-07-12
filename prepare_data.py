@@ -9,6 +9,17 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 import pandas as pd
 from rdkit.Chem.Scaffolds import MurckoScaffold
+import transformers
+import datasets
+from transformers.utils import logging
+
+logger = logging.get_logger(__name__)
+transformers.utils.logging.set_verbosity_info()
+log_levels = logging.get_log_levels_dict().copy()
+trainer_log_levels = dict(**log_levels, passive=-1)
+log_level = trainer_log_levels['passive']
+datasets.utils.logging.set_verbosity(log_level)
+transformers.utils.logging.set_verbosity(log_level)
 
 def set_plot_style(
         fsize: int = 14,
@@ -34,7 +45,6 @@ def set_plot_style(
 
 
 mode = 'tokenize'
-
 
 @hydra.main(version_base=None, config_path="configs/dataset", config_name="pubchem_smiles")
 def entrypoint(cfg: DictConfig):
