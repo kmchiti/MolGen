@@ -53,10 +53,11 @@ def entrypoint(cfg: DictConfig):
         # Initialize DataModule
         datamodule = MolGenDataModule(**cfg)
         print(datamodule.tokenizer)
-        # datamodule.creat_tokenized_datasets()
+        print('********** start tokenizing **********')
+        datamodule.creat_tokenized_datasets()
 
-        # print(datamodule.train_dataset)
-        # print(datamodule.eval_dataset)
+        print(datamodule.train_dataset)
+        print(datamodule.eval_dataset)
 
     elif mode == 'scaffold':
         # def compute_scaffold(smi):
