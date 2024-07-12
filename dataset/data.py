@@ -79,8 +79,16 @@ class MolGenDataModule(object):
     def creat_tokenized_datasets(self):
 
         # Load dataset
-        dataset = load_dataset(self.dataset_name, num_proc=self.dataloader_num_workers)
+        if self.dataset_name == 'MolGen/ZINC_22-raw':
+            print('************ load from file ************')
+            _dat_path = "MolGen___" + self.dataset_name.split("MolGen/")[1].lower()
+            dataset = load_dataset(path=os.path.join(os.environ["HF_HOME"], f'datasets/{_dat_path}'), split="train",
+                                   num_proc=self.dataloader_num_workers)
+        else:
+            dataset = load_dataset(self.dataset_name, num_proc=self.dataloader_num_workers)
+
         if 'test' not in dataset.keys():
+            print('************ start splitting ************')
             dataset = dataset["train"].train_test_split(test_size=self.validation_size, seed=self.val_split_seed)
 
         def tokenize_function(
@@ -109,6 +117,7 @@ class MolGenDataModule(object):
             )
             return {"input_ids": outputs["input_ids"]}
 
+        print('************ start tokenizing ************')
         # Tokenize dataset
         tokenized_dataset = dataset.map(
             tokenize_function,
@@ -124,7 +133,9 @@ class MolGenDataModule(object):
         )
 
         tokenized_dataset.save_to_disk(self.save_directory)
+        print('************************')
         print(f'tokenized dataset saved at: {self.save_directory}')
+        print('************************')
 
         # # Create train and validation datasets
 
