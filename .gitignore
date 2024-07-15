@@ -154,3 +154,4 @@ dmypy.json
 configs/local/default.yaml
 .env
 .autoenv
+/test_data.ipynb

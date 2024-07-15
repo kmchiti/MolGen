@@ -1,9 +1,9 @@
 #!/bin/bash
 #SBATCH --job-name=prepare-data-cpu
-#SBATCH --time=5-00:00
-#SBATCH --partition=main-cpu
-#SBATCH --cpus-per-task=8
-#SBATCH --mem=64G
+#SBATCH --time=3-00:00
+#SBATCH --partition=long-cpu
+#SBATCH --cpus-per-task=16
+#SBATCH --mem=192G
 #SBATCH --ntasks=1
 
 module load libffi

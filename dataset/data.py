@@ -1,6 +1,7 @@
 import warnings
 import os
-from datasets import Features, Value, load_dataset, load_from_disk
+from datasets import Features, Value, load_from_disk
+from dataset import my_load_dataset, get_cache_dir
 from typing import Optional
 from torch.utils.data.dataloader import DataLoader
 from transformers import (
@@ -71,7 +72,7 @@ class MolGenDataModule(object):
             tokenizer=self.tokenizer, mlm=False
         )
         _tok_name = tokenizer_name if tokenizer_name is not None else tokenizer_path.split("tokenizers/")[1].split(".json")[0]
-        _dat_path = "MolGen___"+dataset_name.split("MolGen/")[1].lower()
+        _dat_path = get_cache_dir(dataset_name)
         self.save_directory = os.path.join(os.environ["HF_HOME"],
                                            f'datasets/{_dat_path}/tokenized_{_tok_name}')
         print(self.save_directory)
@@ -79,13 +80,15 @@ class MolGenDataModule(object):
     def creat_tokenized_datasets(self):
 
         # Load dataset
-        if self.dataset_name == 'MolGen/ZINC_22-raw':
-            print('************ load from file ************')
-            _dat_path = "MolGen___" + self.dataset_name.split("MolGen/")[1].lower()
-            dataset = load_dataset(path=os.path.join(os.environ["HF_HOME"], f'datasets/{_dat_path}'), split="train",
-                                   num_proc=self.dataloader_num_workers)
-        else:
-            dataset = load_dataset(self.dataset_name, num_proc=self.dataloader_num_workers)
+        # if self.dataset_name == 'MolGen/ZINC_22-raw':
+        #     print('************ load from file ************')
+        #     _dat_path = "MolGen___" + self.dataset_name.split("MolGen/")[1].lower()
+        #     dataset = my_load_dataset(path=os.path.join(os.environ["HF_HOME"], f'datasets/{_dat_path}'), split="train",
+        #                            num_proc=self.dataloader_num_workers)
+        # else:
+        #     dataset = my_load_dataset(self.dataset_name, num_proc=self.dataloader_num_workers)
+        print('************ load from file ************')
+        dataset = my_load_dataset(self.dataset_name, num_proc=self.dataloader_num_workers)
         print('************ load done! ************')
 
         if 'test' not in dataset.keys():
@@ -168,7 +171,7 @@ class MolGenDataModule(object):
         from functools import partial
 
         # Load dataset
-        dataset = load_dataset(self.dataset_name, num_proc=self.dataloader_num_workers)
+        dataset = my_load_dataset(self.dataset_name, num_proc=self.dataloader_num_workers)
         sequences = dataset["train"][self.mol_type]
         def tokenize_and_get_length(sequence):
             tokens = self.tokenizer(sequence, truncation=True, padding=True, return_tensors='pt')['input_ids']

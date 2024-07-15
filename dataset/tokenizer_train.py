@@ -119,8 +119,8 @@ def train_tokenizer(
     max_vocab_size: int = 30000,
     path_to_save: str = "data/processed/training/tokenizers",
 ) -> None:
-    data = load_dataset(f"MolGen/{dataset_name}")
-    smiles = data["train"][mol_type]  # type: ignore
+    data = load_dataset(f"MolGen/{dataset_name}", split='train')
+    smiles = data[mol_type]  # type: ignore
 
     # Define a tokenizer
     tokenizer = Tokenizer(WordLevel(unk_token="<unk>"))  # type: ignore

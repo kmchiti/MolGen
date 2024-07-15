@@ -12,7 +12,7 @@ from datasets import load_dataset
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 import pandas as pd
-from rdkit.Chem.Scaffolds import MurckoScaffold
+# from rdkit.Chem.Scaffolds import MurckoScaffold
 
 
 def set_plot_style(
@@ -364,4 +364,7 @@ def entrypoint(cfg: DictConfig):
 
 
 if __name__ == "__main__":
-    datamodule = entrypoint()
+    # datamodule = entrypoint()
+
+    raw_dataset = load_dataset("MolGen/ZINC_250K-raw")
+    print(raw_dataset)
