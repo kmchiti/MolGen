@@ -364,7 +364,4 @@ def entrypoint(cfg: DictConfig):
 
 
 if __name__ == "__main__":
-    # datamodule = entrypoint()
-
-    raw_dataset = load_dataset("MolGen/ZINC_250K-raw")
-    print(raw_dataset)
+    datamodule = entrypoint()
