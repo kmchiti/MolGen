@@ -1,11 +1,11 @@
 import hydra
 from omegaconf import DictConfig, OmegaConf
-from transformers import set_seed, Trainer, TrainingArguments
+from transformers import set_seed
 from trainer import MyHFTrainer, MyTrainingArguments
 from callbacks import WandbCallback
-from dataset import MolGenDataModule
+from data_loader import MolDataModule
 from models import GPT2MolGen, GPT2MolGen_flash_atten, Llama_small_flash_atten
-from utils import creat_unique_experiment_name, is_world_process_zero, save_HF_model
+from utils import creat_unique_experiment_name, is_world_process_zero
 import torch
 from transformers import LlamaForCausalLM, LlamaConfig
 from flash_attn.models.gpt import GPTLMHeadModel
@@ -29,7 +29,7 @@ def entrypoint(cfg: DictConfig):
     os.makedirs(output_dir, exist_ok=True)
 
     # Initialize DataModule
-    datamodule = MolGenDataModule(**cfg.dataset)
+    datamodule = MolDataModule(**cfg.dataset)
     datamodule.load_tokenized_dataset()
 
     # Initialize model

@@ -1,9 +1,6 @@
 dataset_name: "MolGen/ZINC_22-raw"
 tokenizer_path: "./data/processed/training/tokenizers/atomwise_ZINC_270M_SMILES_30000.json"
 mol_type: "SMILES"
-overwrite_cache: false
 max_seq_length: 64
-dataloader_num_workers: 16
-preprocess_num_workers: 16
-validation_size: 0.0001
-val_split_seed: 42
+num_proc: 24
+streaming: True
