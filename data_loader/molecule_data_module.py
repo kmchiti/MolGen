@@ -117,6 +117,7 @@ class MolDataModule(object):
 
         # Load dataset
         dataset = load_dataset(self.dataset_name, num_proc=self.num_proc, split="train")
+        column_names = list(dataset.features)
 
         # Filter validation data
         # dataset = dataset.filter(
@@ -134,7 +135,7 @@ class MolDataModule(object):
         tokenized_dataset = dataset.map(
             self.tokenize_function,
             batched=True,
-            remove_columns=dataset["train"].column_names,
+            remove_columns=column_names,
             num_proc=self.num_proc,
             fn_kwargs={
                 "max_length": self.max_seq_length,
@@ -185,10 +186,11 @@ class MolDataModule(object):
 
     def prepare_eval_dataset(self):
         dataset = self.eval_dataset.filter(self.filter_smiles, batched=True, num_proc=self.num_proc)
+        column_names = list(dataset.features)
         self.eval_dataset = dataset.map(
             self.tokenize_function,
             batched=True,
-            remove_columns=dataset["train"].column_names,
+            remove_columns=column_names,
             num_proc=self.num_proc,
             fn_kwargs={
                 "max_length": self.max_seq_length,

@@ -30,8 +30,13 @@ def entrypoint(cfg: DictConfig):
             "pin_memory": True,
         }
         train_data_loader = DataLoader(datamodule.train_dataset, **dataloader_params)
+        eval_data_loader = DataLoader(datamodule.eval_dataset, **dataloader_params)
 
         for i, batch in enumerate(train_data_loader):
+            print(i, batch['input_ids'].shape)
+            if i > 10:
+                break
+        for i, batch in enumerate(eval_data_loader):
             print(i, batch['input_ids'].shape)
             if i > 10:
                 break
