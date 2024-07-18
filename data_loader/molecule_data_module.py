@@ -1,4 +1,5 @@
 import os
+import warnings
 from datasets import load_from_disk, load_dataset
 from datasets.arrow_dataset import Dataset
 from datasets.naming import camelcase_to_snakecase
@@ -8,13 +9,6 @@ from transformers import (
     PreTrainedTokenizerFast,
     AutoTokenizer,
 )
-
-def get_cache_dir(dataset_name):
-    namespace_and_dataset_name = dataset_name.split("/")
-    namespace_and_dataset_name[-1] = camelcase_to_snakecase(namespace_and_dataset_name[-1])
-    cached_relative_path = "___".join(namespace_and_dataset_name)
-    return cached_relative_path
-
 
 class MolDataModule(object):
     def __init__(
@@ -37,9 +31,9 @@ class MolDataModule(object):
         self.tokenizer_path = tokenizer_path
         self.streaming = streaming
 
-        _tok_name = tokenizer_name if tokenizer_name is not None else \
+        _tok_name = tokenizer_name.replace('/', '_') if tokenizer_name is not None else \
             tokenizer_path.split("tokenizers/")[1].split(".json")[0]
-        _dat_path = get_cache_dir(dataset_name)
+        _dat_path = self.get_cache_dir(dataset_name)
         self.save_directory = os.path.join(HF_CACHE_HOME, 'datasets', _dat_path, f'tokenized_{_tok_name}')
 
         # Load tokenizer
@@ -70,13 +64,25 @@ class MolDataModule(object):
         self.train_dataset = None
 
     @staticmethod
-    def filter_smiles(
-            example: dict,
-            mol_type: str,
-            valid_set: Dataset,
-    ):
+    def get_cache_dir(dataset_name):
+        namespace_and_dataset_name = dataset_name.split("/")
+        namespace_and_dataset_name[-1] = camelcase_to_snakecase(namespace_and_dataset_name[-1])
+        cached_relative_path = "___".join(namespace_and_dataset_name)
+        return cached_relative_path
+
+    # TODO:  no idea why it's not working
+    # @staticmethod
+    # def filter_smiles(
+    #         example: dict,
+    #         mol_type: str,
+    #         valid_set: Dataset,
+    # ):
+    #     # Returns False if the SMILES is in the validation set, True otherwise
+    #     return example[mol_type] not in valid_set
+
+    def filter_smiles(self, example: dict):
         # Returns False if the SMILES is in the validation set, True otherwise
-        return example[mol_type] not in valid_set
+        return example[self.mol_type] not in self.valid_set
 
     @staticmethod
     def tokenize_function(
@@ -112,15 +118,16 @@ class MolDataModule(object):
         dataset = load_dataset(self.dataset_name, num_proc=self.num_proc, split="train")
 
         # Filter validation data
-        dataset = dataset.filter(
-            self.filter_smiles,
-            batched=True,
-            num_proc=self.num_proc,
-            fn_kwargs={
-                "mol_type": self.mol_type,
-                "valid_set": self.valid_set,
-            },
-        )
+        # dataset = dataset.filter(
+        #     self.filter_smiles,
+        #     batched=True,
+        #     num_proc=self.num_proc,
+        #     fn_kwargs={
+        #         "mol_type": self.mol_type,
+        #         "valid_set": self.valid_set,
+        #     },
+        # )
+        dataset = dataset.filter(self.filter_smiles, batched=True, num_proc=self.num_proc)
 
         # Tokenize dataset
         tokenized_dataset = dataset.map(
@@ -138,27 +145,41 @@ class MolDataModule(object):
         tokenized_dataset.save_to_disk(self.save_directory)
         print(f'tokenized dataset saved at: {self.save_directory}')
 
+    def prepare_tokenized_streaming_dataset(self):
+
+        dataset = load_dataset(self.dataset_name, split="train", streaming=True)
+        column_names = list(dataset.features)
+        # dataset = dataset.filter(
+        #     self.filter_smiles,
+        #     fn_kwargs={
+        #         "mol_type": self.mol_type,
+        #         "valid_set": self.valid_set,
+        #     }
+        # )
+        dataset = dataset.filter(self.filter_smiles)
+
+        tokenized_dataset = dataset.map(
+            self.tokenize_function,
+            remove_columns=column_names,
+            fn_kwargs={
+                "max_length": self.max_seq_length,
+                "mol_type": self.mol_type,
+                "tokenizer": self.tokenizer,
+            },
+        )
+        print(f'prepare streaming dataset')
+        return tokenized_dataset
+
     def load_tokenized_dataset(self):
         if self.streaming:
-            dataset = load_dataset(self.dataset_name, num_proc=self.num_proc, split="train", streaming=True)
-            dataset = dataset.filter(
-                self.filter_smiles,
-                fn_kwargs={
-                    "mol_type": self.mol_type,
-                    "valid_set": self.valid_set,
-                },
-            )
-
-            tokenized_dataset = dataset.map(
-                self.tokenize_function,
-                fn_kwargs={
-                    "max_length": self.max_seq_length,
-                    "mol_type": self.mol_type,
-                    "tokenizer": self.tokenizer,
-                },
-            )
-            self.train_dataset = tokenized_dataset
+            self.train_dataset = self.prepare_tokenized_streaming_dataset()
 
         else:
+            if not os.path.exists(self.save_directory):
+                warnings.warn("tokenized dataset didn't found locally.\ncreating tokenized dataset may takes time.")
+                self.creat_tokenized_datasets()
+
             tokenized_dataset = load_from_disk(self.save_directory)
             self.train_dataset = tokenized_dataset
+
+
