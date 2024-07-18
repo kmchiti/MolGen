@@ -26,7 +26,7 @@ def entrypoint(cfg: DictConfig):
         dataloader_params = {
             "batch_size": 8,
             "collate_fn": datamodule.data_collator,
-            "num_workers": 1,
+            "num_workers": datamodule.num_proc,
             "pin_memory": True,
         }
         train_data_loader = DataLoader(datamodule.train_dataset, **dataloader_params)

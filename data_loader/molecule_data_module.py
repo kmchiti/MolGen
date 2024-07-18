@@ -47,6 +47,8 @@ class MolDataModule(object):
         tokenizer.eos_token = "<eos>"
         tokenizer.bos_token = "<bos>"
         tokenizer.pad_token = "[PAD]"
+        # To get rid of fast tokenizer warning, from: https://github.com/huggingface/transformers/issues/22638#issuecomment-1560406455
+        tokenizer.deprecation_warnings["Asking-to-pad-a-fast-tokenizer"] = True
         self.tokenizer = tokenizer
 
         self.data_collator = DataCollatorForLanguageModeling(
@@ -185,9 +187,8 @@ class MolDataModule(object):
             self.train_dataset = tokenized_dataset
 
     def prepare_eval_dataset(self):
-        dataset = self.eval_dataset.filter(self.filter_smiles, batched=True, num_proc=self.num_proc)
-        column_names = list(dataset.features)
-        self.eval_dataset = dataset.map(
+        column_names = list(self.eval_dataset.features)
+        self.eval_dataset = self.eval_dataset.map(
             self.tokenize_function,
             batched=True,
             remove_columns=column_names,
