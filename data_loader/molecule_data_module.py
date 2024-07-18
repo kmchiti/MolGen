@@ -61,6 +61,7 @@ class MolDataModule(object):
         else:
             self.eval_dataset = load_dataset(fix_validation_name, split='valid', num_proc=num_proc)
         self.valid_set = set(self.eval_dataset["SMILES"])  # this set will use 1GB of RAM
+        self.prepare_eval_dataset()
         self.train_dataset = None
 
     @staticmethod
@@ -181,5 +182,19 @@ class MolDataModule(object):
 
             tokenized_dataset = load_from_disk(self.save_directory)
             self.train_dataset = tokenized_dataset
+
+    def prepare_eval_dataset(self):
+        dataset = self.eval_dataset.filter(self.filter_smiles, batched=True, num_proc=self.num_proc)
+        self.eval_dataset = dataset.map(
+            self.tokenize_function,
+            batched=True,
+            remove_columns=dataset["train"].column_names,
+            num_proc=self.num_proc,
+            fn_kwargs={
+                "max_length": self.max_seq_length,
+                "mol_type": self.mol_type,
+                "tokenizer": self.tokenizer,
+            },
+        )
 
 
